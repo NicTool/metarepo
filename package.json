@@ -1,0 +1,9 @@
+{
+  "name": "nictool-monorepo",
+  "private": true,
+  "description": "NicTool DNS Management - Monorepo",
+  "scripts": {
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive run lint"
+  }
+}

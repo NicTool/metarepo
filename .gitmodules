@@ -1,0 +1,21 @@
+[submodule "NicTool"]
+	path = NicTool
+	url = https://github.com/burning-bush-dev/NicTool.git
+[submodule "api"]
+	path = api
+	url = https://github.com/burning-bush-dev/api.git
+[submodule "server"]
+	path = server
+	url = https://github.com/burning-bush-dev/server.git
+[submodule "libs/dns-zone"]
+	path = libs/dns-zone
+	url = https://github.com/burning-bush-dev/dns-zone.git
+[submodule "libs/validate"]
+	path = libs/validate
+	url = https://github.com/burning-bush-dev/validate.git
+[submodule "libs/dns-nameserver"]
+	path = libs/dns-nameserver
+	url = https://github.com/burning-bush-dev/dns-nameserver.git
+[submodule "libs/dns-resource-record"]
+	path = libs/dns-resource-record
+	url = https://github.com/burning-bush-dev/dns-resource-record.git

@@ -1,0 +1,4 @@
+node_modules/
+docker/.env
+.env
+.DS_Store
