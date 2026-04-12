@@ -1,7 +1,7 @@
-.PHONY: help init install env up up-ui up-legacy up-all down clean test logs sync
+.PHONY: help init install env up up-ui up-legacy up-all down clean test test-v2 test-v2-xt logs sync fork
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 init: ## Clone submodules and install deps
@@ -35,11 +35,33 @@ clean: ## Stop all and remove volumes
 test: ## Run all Node.js tests
 	pnpm test
 
+test-v2-xt: ## Run NicTool v2 permission & delegation tests (requires up-legacy)
+	docker compose --env-file docker/.env --profile legacy exec -T nictool-legacy bash -c 'cd /usr/local/nictool/server && prove -v xt/*.t'
+
+test-v2: ## Run all NicTool v2 tests (requires up-legacy)
+	docker compose --env-file docker/.env --profile legacy exec -T nictool-legacy make -C /usr/local/nictool/server test
+	docker compose --env-file docker/.env --profile legacy exec -T nictool-legacy make -C /usr/local/nictool/client test
+	$(MAKE) test-v2-xt
+
 logs: ## Tail all service logs
 	docker compose --profile all logs -f
 
-sync: ## Fetch upstream changes for all submodules
-	@for dir in NicTool api server libs/dns-zone libs/validate libs/dns-nameserver libs/dns-resource-record; do \
-		echo "==> Syncing $$dir"; \
-		(cd $$dir && git fetch upstream && git merge upstream/main --no-edit); \
-	done
+sync: ## Update all submodules to latest from their tracked branch
+	git submodule update --remote --merge
+
+fork: ## Fork all upstream repos into your GitHub account and repoint submodules
+	@user=$$(gh api user --jq .login) || { echo "Run 'gh auth login' first"; exit 1; }; \
+	echo "Forking repos into $$user's account..."; \
+	git config -f .gitmodules --get-regexp '\.url$$' | while read key url; do \
+		name=$$(echo "$$key" | sed 's/submodule\.\(.*\)\.url/\1/'); \
+		upstream=$$(echo "$$url" | sed 's|.*github.com/||; s|\.git$$||'); \
+		echo "==> $$upstream"; \
+		gh repo fork "$$upstream" --clone=false 2>/dev/null || true; \
+		fork_url="https://github.com/$$user/$$(basename $$upstream).git"; \
+		git submodule set-url "$$name" "$$fork_url"; \
+		(cd "$$name" && \
+			git remote set-url origin "$$fork_url" && \
+			git remote add upstream "$$url" 2>/dev/null || \
+			git remote set-url upstream "$$url"); \
+	done; \
+	echo "Done. 'origin' is your fork, 'upstream' is NicTool."
