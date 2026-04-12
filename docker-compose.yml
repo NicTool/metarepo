@@ -32,7 +32,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./api:/app:ro
+      - ./api:/app
       - api_node_modules:/app/node_modules
     environment:
       NODE_ENV: development
@@ -61,7 +61,7 @@ services:
       api:
         condition: service_healthy
     volumes:
-      - ./server:/app:ro
+      - ./server:/app
       - server_node_modules:/app/node_modules
     environment:
       NICTOOL_TLS: ${NICTOOL_TLS:-false}
