@@ -10,16 +10,34 @@ init: ## Clone submodules
 env: ## Generate docker/.env with random passwords
 	./docker/generate-env.sh
 
-up: env ## Start db + api (v3 core)
+# Stop containers from any compose project that hold ports we need.
+# Parses docker-compose.yml defaults + docker/.env overrides, then
+# checks each host port.  Containers belonging to THIS project are
+# skipped (compose up will manage them).
+check-ports:
+	@PROJECT=$$(basename "$$PWD"); \
+	PORTS=""; \
+	if [ -f docker/.env ]; then . docker/.env; fi; \
+	PORTS="$${DB_PORT:-3307} $${API_PORT:-3000} $${SERVER_PORT:-8080} $${LEGACY_HTTP_PORT:-8082} $${LEGACY_HTTPS_PORT:-8443}"; \
+	for port in $$PORTS; do \
+		cid=$$(docker ps -q --filter "publish=$$port" 2>/dev/null | head -1); \
+		[ -z "$$cid" ] && continue; \
+		name=$$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$$cid" 2>/dev/null); \
+		[ "$$name" = "$$PROJECT" ] && continue; \
+		echo "Port $$port is held by container $$cid (project: $${name:-unknown}), stopping it..."; \
+		docker stop "$$cid" >/dev/null; \
+	done
+
+up: env check-ports ## Start db + api (v3 core)
 	docker compose --env-file docker/.env up --build -d --wait
 
-up-ui: env ## Start db + api + server (v3 full stack)
+up-ui: env check-ports ## Start db + api + server (v3 full stack)
 	docker compose --env-file docker/.env --profile ui up --build -d --wait
 
-up-legacy: env ## Start db + legacy Perl NicTool
+up-legacy: env check-ports ## Start db + legacy Perl NicTool
 	docker compose --env-file docker/.env --profile legacy up --build -d --wait
 
-up-all: env ## Start everything
+up-all: env check-ports ## Start everything
 	docker compose --env-file docker/.env --profile all up --build -d --wait
 
 down: ## Stop all services
