@@ -21,7 +21,7 @@ Every path is a git submodule pointing to the NicTool org upstream. If you want 
 
 ## Prerequisites
 
-A handful of things on a fresh macOS machine. The versions match what the Dockerfiles use internally (Node 22, MariaDB 11, Debian bookworm for legacy Perl).
+A handful of things on a fresh macOS machine. Everything else (Node 22, MariaDB 11, Perl) runs inside Docker containers.
 
 Homebrew, if you don't already have it:
 
@@ -32,7 +32,7 @@ Homebrew, if you don't already have it:
 Then install the rest:
 
 ```sh
-brew install colima docker docker-compose node@22 pnpm git
+brew install colima docker docker-compose git
 colima start
 ```
 
@@ -54,7 +54,17 @@ make env
 make up
 ```
 
-`make init` checks out all submodules recursively, then runs `pnpm install` to wire up the Node.js workspace. `make env` creates `docker/.env` with randomly generated passwords via `openssl rand` -- it won't overwrite an existing file, so it's safe to run more than once. Edit `docker/.env` directly to customize ports or credentials (see `docker/.env.example` for the full list).
+`make init` checks out all submodules recursively. Node.js dependencies are installed inside the Docker containers during `make up`, so nothing is installed on your host.
+
+> **SSH clone errors?** Some upstream submodules (notably `api/.release` and `libs/validate/.release`) reference a dependency via SSH (`git@github.com:...`). If you don't have SSH keys configured for GitHub, `make init` will fail with "Permission denied (publickey)." Fix it by telling git to use HTTPS instead:
+>
+> ```sh
+> git config --global url."https://github.com/".insteadOf "git@github.com:"
+> ```
+>
+> Then re-run `make init`.
+
+`make env` creates `docker/.env` with randomly generated passwords via `openssl rand` -- it won't overwrite an existing file, so it's safe to run more than once. Edit `docker/.env` directly to customize ports or credentials (see `docker/.env.example` for the full list).
 
 Pick whichever slice of the stack you need:
 
@@ -91,28 +101,36 @@ All ports are configurable in `docker/.env`.
 
 ## Testing
 
-v3 Node.js tests use the built-in `node:test` runner. From the monorepo root:
+All tests run inside containers -- nothing is installed on your host.
 
 ```sh
-make test
+make test           # API + library tests (requires make up)
+make test-api       # just the API tests
+make test-server    # just the server tests (requires make up-ui)
+make test-libs      # just the four libraries (no running services needed)
 ```
 
-This runs `pnpm --recursive test`, which hits every package with a `test` script: the API, server, and all four libraries. The API integration tests need a running database -- if you've already run `make up`, the MariaDB container should be there.
-
-For end-to-end tests against running containers:
-
-```sh
-make up-all
-docker compose exec api npm test       # v3 API (339 tests)
-docker compose exec server npm test     # v3 Server
-```
+`make test-api` and `make test-server` exec into the running containers. `make test-libs` spins up ephemeral `node:22` containers for each library. The API integration tests need a running database, so run `make up` first.
 
 The v2 container has its own Perl test suites. These run inside the container against the shared MariaDB:
 
 ```sh
-make test-v2      # runs server, client, and permission/delegation tests
-make test-v2-xt   # just the permission & delegation tests
+make test-v2      # runs everything below in sequence
+make test-v2-xt   # just the extended tests (see below)
 ```
+
+`make test-v2` runs three things in order: the server unit tests, the client unit tests, and then the extended ("xt") integration tests. The xt tests exercise cross-group permissions, zone delegation, and other multi-object interactions that require a running database with seeded data. `make test-v2-xt` runs only that last step, which is useful when you're iterating on permission or delegation logic and don't want to wait for the full suite.
+
+## Local development
+
+The compose file bind-mounts source directories into each container, so code changes on your host are reflected immediately without rebuilding. Just restart the affected service:
+
+```sh
+docker compose --env-file docker/.env --profile all restart   # restart all
+docker compose --env-file docker/.env restart api              # restart one
+```
+
+You only need `--build` when you change a Dockerfile or dependencies (`package.json`, `Makefile.PL`).
 
 Tear down when you're done:
 
@@ -128,9 +146,12 @@ make logs         # tail logs from all services
 make down         # stop everything (keeps data)
 make clean        # stop everything and delete volumes (fresh start)
 make sync         # update all submodules to latest from their tracked branch
-make test         # run v3 Node.js tests
-make test-v2      # run all v2 Perl tests (requires up-legacy)
-make install      # reinstall Node.js dependencies
+make test         # run v3 API + library tests (requires make up)
+make test-api     # run v3 API tests only
+make test-server  # run v3 server tests only (requires make up-ui)
+make test-libs    # run library tests (no running services needed)
+make test-v2      # run all v2 Perl tests (server, client, and extended; requires up-legacy)
+make test-v2-xt   # run only v2 extended integration tests (permissions, delegation)
 ```
 
 ## Contributing from a fork

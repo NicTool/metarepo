@@ -31,6 +31,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./api:/app:ro
+      - api_node_modules:/app/node_modules
     environment:
       NODE_ENV: development
       NICTOOL_DB_HOST: db
@@ -58,9 +61,8 @@ services:
       api:
         condition: service_healthy
     volumes:
-      - ./server/index.js:/app/index.js:ro
-      - ./server/bin:/app/bin:ro
-      - ./server/html:/app/html:ro
+      - ./server:/app:ro
+      - server_node_modules:/app/node_modules
     environment:
       NICTOOL_TLS: ${NICTOOL_TLS:-false}
       NICTOOL_DB_HOST: db
@@ -83,6 +85,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./NicTool/server:/usr/local/nictool/server
+      - ./NicTool/client:/usr/local/nictool/client
+      - ./NicTool/dist:/usr/local/nictool/dist:ro
     env_file: docker/.env
     environment:
       DB_ENGINE: mysql
@@ -90,3 +96,5 @@ services:
 
 volumes:
   db-data:
+  api_node_modules:
+  server_node_modules:
