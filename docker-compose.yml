@@ -93,6 +93,12 @@ services:
     environment:
       DB_ENGINE: mysql
       DB_HOSTNAME: db
+    healthcheck:
+      test: ["CMD", "curl", "-fso", "/dev/null", "http://localhost/index.cgi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   db-data:

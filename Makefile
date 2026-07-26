@@ -1,11 +1,11 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-server test-libs test-v2 test-v2-xt logs sync fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-server test-libs test-v2 test-v2-xt logs sync status update train fork
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-init: ## Clone submodules
-	git submodule update --init --recursive
+init: ## Clone all repos and check out manifest pins
+	./nt.py sync
 
 env: ## Generate docker/.env with random passwords
 	./docker/generate-env.sh
@@ -71,22 +71,17 @@ test-v2: ## Run all NicTool v2 tests (requires up-legacy)
 logs: ## Tail all service logs
 	docker compose --profile all logs -f
 
-sync: ## Update all submodules to latest from their tracked branch
-	git submodule update --remote --merge
+sync: ## Fetch all repos, move clean ones to their manifest pins
+	./nt.py sync
 
-fork: ## Fork all upstream repos into your GitHub account and repoint submodules
-	@user=$$(gh api user --jq .login) || { echo "Run 'gh auth login' first"; exit 1; }; \
-	echo "Forking repos into $$user's account..."; \
-	git config -f .gitmodules --get-regexp '\.url$$' | while read key url; do \
-		name=$$(echo "$$key" | sed 's/submodule\.\(.*\)\.url/\1/'); \
-		upstream=$$(echo "$$url" | sed 's|.*github.com/||; s|\.git$$||'); \
-		echo "==> $$upstream"; \
-		gh repo fork "$$upstream" --clone=false 2>/dev/null || true; \
-		fork_url="https://github.com/$$user/$$(basename $$upstream).git"; \
-		git submodule set-url "$$name" "$$fork_url"; \
-		(cd "$$name" && \
-			git remote set-url origin "$$fork_url" && \
-			git remote add upstream "$$url" 2>/dev/null || \
-			git remote set-url upstream "$$url"); \
-	done; \
-	echo "Done. 'origin' is your fork, 'upstream' is NicTool."
+status: ## Drift report: pin vs HEAD, dirty files, claimed branches
+	./nt.py status
+
+update: ## Check upstream for newer release tags (make update W=1 to write)
+	./nt.py update $(if $(W),--write)
+
+train: ## Assemble PR integration branches declared in mani.yaml
+	./nt.py train
+
+fork: ## Create GitHub forks and wire 'fork' remotes (make fork OWNER=<user|org>)
+	./nt.py fork $(OWNER)

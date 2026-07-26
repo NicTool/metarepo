@@ -17,7 +17,7 @@ The idea is straightforward: v2 running next to v3, sharing the same MariaDB, on
 | `libs/dns-resource-record/` | Resource record handling | [NicTool/dns-resource-record](https://github.com/NicTool/dns-resource-record) |
 | `research/` | LLM-generated audits, gap analyses, design notes | [NicTool/research](https://github.com/NicTool/research) |
 
-Every path is a git submodule pointing to the NicTool org upstream. If you want to contribute from your own fork, `make fork` sets that up automatically (see below).
+Every path is a plain git clone, declared in `mani.yaml` — the manifest that records which repos and which versions belong together. [mani](https://manicli.com) clones and enumerates them; `nt.py` keeps each checkout at its pinned release tag or branch (see below).
 
 ## Prerequisites
 
@@ -32,9 +32,11 @@ Homebrew, if you don't already have it:
 Then install the rest:
 
 ```sh
-brew install colima docker docker-compose git
+brew install colima docker docker-compose git mani uv gh
 colima start
 ```
+
+[mani](https://manicli.com) manages the member repos, [uv](https://docs.astral.sh/uv/) runs the workspace tool `nt.py`, and `gh` talks to GitHub for PR trains and release checks.
 
 We use [Colima](https://github.com/abiosoft/colima) as the container runtime -- it's free, lightweight, and doesn't require a Docker Desktop license. Colima needs to be running before any `docker compose` or `make up-*` commands work. After a reboot, just `colima start` again.
 
@@ -54,15 +56,26 @@ make env
 make up
 ```
 
-`make init` checks out all submodules recursively. Node.js dependencies are installed inside the Docker containers during `make up`, so nothing is installed on your host.
+`make init` clones every repo in `mani.yaml` and checks each out at its pinned version. Node.js dependencies are installed inside the Docker containers during `make up`, so nothing is installed on your host.
 
-> **SSH clone errors?** Some upstream submodules (notably `api/.release` and `libs/validate/.release`) reference a dependency via SSH (`git@github.com:...`). If you don't have SSH keys configured for GitHub, `make init` will fail with "Permission denied (publickey)." Fix it by telling git to use HTTPS instead:
+> **SSH clone errors?** Some member repos have nested submodules (notably `api/.release`) that reference dependencies via SSH (`git@github.com:...`). If you don't have SSH keys configured for GitHub, initializing them will fail with "Permission denied (publickey)." Fix it by telling git to use HTTPS instead:
 >
 > ```sh
 > git config --global url."https://github.com/".insteadOf "git@github.com:"
 > ```
 >
 > Then re-run `make init`.
+
+Day to day, three commands keep the workspace honest:
+
+```sh
+make status       # drift report: where is each repo vs its pin?
+make sync         # fetch everything, move clean repos to their pins
+make update       # any newer upstream releases? (make update W=1 writes them)
+```
+
+`nt.py` never touches a repo that has uncommitted changes or a checked-out
+work branch — active work always wins over the manifest.
 
 `make env` creates `docker/.env` with randomly generated passwords via `openssl rand` -- it won't overwrite an existing file, so it's safe to run more than once. Edit `docker/.env` directly to customize ports or credentials (see `docker/.env.example` for the full list).
 
@@ -145,7 +158,10 @@ make help         # list all targets
 make logs         # tail logs from all services
 make down         # stop everything (keeps data)
 make clean        # stop everything and delete volumes (fresh start)
-make sync         # update all submodules to latest from their tracked branch
+make status       # drift report for all repos
+make sync         # fetch all repos, move clean ones to their pins
+make update       # check upstream for newer release tags
+make train        # assemble PR integration branches from mani.yaml
 make test         # run v3 API + library tests (requires make up)
 make test-api     # run v3 API tests only
 make test-server  # run v3 server tests only (requires make up-ui)
@@ -156,19 +172,31 @@ make test-v2-xt   # run only v2 extended integration tests (permissions, delegat
 
 ## Contributing from a fork
 
-The submodules point to the NicTool org by default. To fork everything into your own GitHub account and repoint the submodules:
+The manifest only knows about upstream -- `origin` in every repo points at
+`NicTool/*` and is read-only. Forks are personal, so they live in each clone's
+git config, never in `mani.yaml`. One command creates and wires them:
 
 ```sh
-make fork
+make fork                  # forks under your gh login
+make fork OWNER=my-org     # or under an org you control
 ```
 
-This uses `gh` to fork each upstream repo, then sets `origin` to your fork and `upstream` to NicTool. You'll need `gh auth login` first.
+This forks any repo you haven't forked yet (via `gh`), adds a `fork` remote to
+every clone, and fast-forwards existing forks from upstream. Re-run it any
+time -- coming back after months away, it re-syncs your forks and repairs
+missing remotes, reusing whatever owner the remotes already point at.
 
-To pull in the latest from upstream at any point:
+Then branch in the member repo, push to `fork`, and open a PR against
+upstream:
 
 ```sh
-make sync
+git -C api checkout -b my-change
+git -C api push -u fork my-change
+gh pr create --repo NicTool/api --head <owner>:my-change --base main
 ```
+
+Done with forks? `./nt.py fork --remove` drops the remotes; your forks on
+GitHub stay put.
 
 ## Project structure
 
@@ -180,18 +208,21 @@ monorepo/
     generate-env.sh       # creates .env with random passwords
   docker-compose.yml      # all services, all profiles
   Makefile                # task runner
-  pnpm-workspace.yaml     # Node.js workspace config
-  package.json            # monorepo root (test + lint scripts)
-  api/                    # [submodule] v3 REST API
-  server/                 # [submodule] v3 Web UI
-  NicTool/                # [submodule] Legacy Perl v2
-  research/               # [submodule] audits, gap analyses, design notes
+  mani.yaml               # manifest: repos, pins, PR trains
+  nt.py                   # workspace tool: sync / status / update / train / fork
+  api/                    # [repo] v3 REST API
+  server/                 # [repo] v3 Web UI
+  NicTool/                # [repo] Legacy Perl v2
+  research/               # [repo] audits, gap analyses, design notes
   libs/
-    validate/             # [submodule] DNS validation
-    dns-zone/             # [submodule] zone import/export
-    dns-nameserver/       # [submodule] nameserver management
-    dns-resource-record/  # [submodule] resource record handling
+    validate/             # [repo] DNS validation
+    dns-zone/             # [repo] zone import/export
+    dns-nameserver/       # [repo] nameserver management
+    dns-resource-record/  # [repo] resource record handling
 ```
+
+Member repos are gitignored — this workspace records *intent* (pins, trains)
+in `mani.yaml`, never member-repo content.
 
 ## Known issues
 
