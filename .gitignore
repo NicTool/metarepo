@@ -2,3 +2,14 @@ node_modules/
 docker/.env
 .env
 .DS_Store
+__pycache__/
+# mani #
+research
+libs/dns-resource-record
+libs/dns-nameserver
+libs/dns-zone
+libs/validate
+server
+api
+NicTool
+# mani #

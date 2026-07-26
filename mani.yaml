@@ -1,0 +1,86 @@
+# NicTool workspace manifest — single source of truth for which repos and
+# which versions belong together.
+#
+# mani owns: cloning, .gitignore upkeep, running commands across repos.
+# nt.py owns: pins (env.pin), release updates, PR trains (env.train), and
+# fork remotes (nt fork) — forks are personal state, never recorded here.
+#
+# env.pin semantics (consumed by nt.py, not mani):
+#   release tag (vX.Y.Z) -> detached checkout at that tag
+#   branch name          -> checkout branch, fast-forward from origin
+# env.train: ordered upstream PR numbers to merge into an integration branch.
+
+projects:
+  NicTool:
+    path: NicTool
+    url: https://github.com/NicTool/NicTool.git
+    desc: v2 Perl codebase (web UI, SOAP API, exporters)
+    tags: [v2]
+    env:
+      pin: master
+      train: "344 355 356 357 358 359"
+
+  api:
+    path: api
+    url: https://github.com/NicTool/api.git
+    desc: v3 Node.js REST API
+    tags: [v3, app]
+    env:
+      pin: v3.0.0
+
+  server:
+    path: server
+    url: https://github.com/NicTool/server.git
+    desc: v3 web UI (no releases yet, tracks main)
+    tags: [v3, app]
+    env:
+      pin: main
+
+  validate:
+    path: libs/validate
+    url: https://github.com/NicTool/validate.git
+    desc: Joi schemas shared across v3
+    tags: [v3, lib]
+    env:
+      pin: v0.9.1
+
+  dns-zone:
+    path: libs/dns-zone
+    url: https://github.com/NicTool/dns-zone.git
+    desc: v3 zone file parsing
+    tags: [v3, lib]
+    env:
+      pin: v1.2.3
+
+  dns-nameserver:
+    path: libs/dns-nameserver
+    url: https://github.com/NicTool/dns-nameserver.git
+    desc: v3 nameserver management
+    tags: [v3, lib]
+    env:
+      pin: v0.7.5
+
+  dns-resource-record:
+    path: libs/dns-resource-record
+    url: https://github.com/NicTool/dns-resource-record.git
+    desc: v3 resource record types
+    tags: [v3, lib]
+    env:
+      pin: v1.8.1
+
+  research:
+    path: research
+    url: https://github.com/NicTool/research.git
+    desc: design notes and v2->v3 gap analysis
+    tags: [doc]
+    env:
+      pin: main
+
+tasks:
+  status:
+    desc: one-line git status per repo
+    cmd: git status -sb | head -3
+
+  fetch:
+    desc: fetch all remotes with tags, prune
+    cmd: git fetch --all --prune --tags --quiet
