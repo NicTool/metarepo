@@ -1,4 +1,4 @@
-# NicTool Monorepo
+# NicTool Metarepo
 
 This pulls together every piece of the NicTool DNS management stack -- the legacy Perl v2, the Node.js v3 API and web UI, shared libraries, and research notes -- so you can run them side by side from a single `docker compose up`.
 
@@ -49,8 +49,8 @@ No Perl setup needed on your host -- the legacy v2 stack runs entirely inside Do
 Clone, initialize, generate credentials, and bring up the stack:
 
 ```sh
-git clone https://github.com/NicTool/monorepo.git
-cd monorepo
+git clone https://github.com/NicTool/metarepo.git
+cd metarepo
 make init
 make env
 make up
@@ -201,7 +201,7 @@ GitHub stay put.
 ## Project structure
 
 ```
-monorepo/
+metarepo/
   docker/
     .env.example          # reference for environment variables
     .env                  # generated credentials (gitignored)
