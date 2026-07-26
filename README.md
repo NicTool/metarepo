@@ -58,14 +58,6 @@ make up
 
 `make init` clones every repo in `mani.yaml` and checks each out at its pinned version. Node.js dependencies are installed inside the Docker containers during `make up`, so nothing is installed on your host.
 
-> **SSH clone errors?** Some member repos have nested submodules (notably `api/.release`) that reference dependencies via SSH (`git@github.com:...`). If you don't have SSH keys configured for GitHub, initializing them will fail with "Permission denied (publickey)." Fix it by telling git to use HTTPS instead:
->
-> ```sh
-> git config --global url."https://github.com/".insteadOf "git@github.com:"
-> ```
->
-> Then re-run `make init`.
-
 Day to day, three commands keep the workspace honest:
 
 ```sh

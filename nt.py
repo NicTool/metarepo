@@ -101,7 +101,7 @@ def align_nested_submodules(p: Project) -> str:
     if not (p.path / ".gitmodules").exists():
         return ""
     rc = git(p.path, "submodule", "update", "--init", "--recursive", "--quiet", check=False)
-    return "" if rc.returncode == 0 else " (nested submodule update FAILED — SSH keys? see README)"
+    return "" if rc.returncode == 0 else " (nested submodule update FAILED)"
 
 
 def ahead_behind(p: Project, upstream_ref: str) -> tuple[int, int]:
