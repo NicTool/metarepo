@@ -1,10 +1,9 @@
 import io
+import nt
 import subprocess
 import sys
 import unittest
 from unittest.mock import call, patch
-
-import nt
 
 
 class TtyInput(io.StringIO):
@@ -32,7 +31,8 @@ class MissingPrerequisiteTests(unittest.TestCase):
             nt.require_command("mani")
 
         run.assert_called_once_with(
-            ["/opt/homebrew/bin/brew", "install", "mani"]
+            ["/opt/homebrew/bin/brew", "install", "mani"],
+            check=False,
         )
 
     @patch("nt.shutil.which", return_value="/opt/homebrew/bin/brew")
@@ -58,9 +58,24 @@ class MissingPrerequisiteTests(unittest.TestCase):
         self.assertEqual(
             run.call_args_list,
             [
-                call(["mani", "sync"], cwd=None, capture_output=True, text=True),
-                call(["/opt/homebrew/bin/brew", "install", "mani"]),
-                call(["mani", "sync"], cwd=None, capture_output=True, text=True),
+                call(
+                    ["mani", "sync"],
+                    cwd=None,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                ),
+                call(
+                    ["/opt/homebrew/bin/brew", "install", "mani"],
+                    check=False,
+                ),
+                call(
+                    ["mani", "sync"],
+                    cwd=None,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                ),
             ],
         )
 
@@ -73,15 +88,19 @@ class MissingPrerequisiteTests(unittest.TestCase):
         with (
             patch.object(sys, "stdin", io.StringIO()),
             patch.object(sys, "stderr", stderr),
+            self.assertRaisesRegex(SystemExit, "127"),
         ):
-            with self.assertRaisesRegex(SystemExit, "127"):
-                nt.sh(["mani", "sync"])
+            nt.sh(["mani", "sync"])
 
         message = stderr.getvalue()
         self.assertIn("brew install mani", message)
         self.assertNotIn("Run this command now?", message)
         run.assert_called_once_with(
-            ["mani", "sync"], cwd=None, capture_output=True, text=True
+            ["mani", "sync"],
+            cwd=None,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
 

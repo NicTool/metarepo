@@ -104,7 +104,10 @@ def handle_missing_command(command: str) -> None:
             if answer in {"y", "yes"}:
                 print(file=sys.stderr)
                 try:
-                    installed = subprocess.run([brew, "install", requirement.brew_formula])
+                    installed = subprocess.run(
+                        [brew, "install", requirement.brew_formula],
+                        check=False,
+                    )
                 except KeyboardInterrupt:
                     print(f"\nHomebrew installation interrupted; retry with: {install_command}",
                           file=sys.stderr)
@@ -142,13 +145,17 @@ def require_command(command: str) -> None:
 def sh(args: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
     """Run a command, capturing output; exit with a clear message on failure."""
     try:
-        proc = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+        proc = subprocess.run(
+            args, cwd=cwd, capture_output=True, text=True, check=False
+        )
     except FileNotFoundError as error:
         if error.filename != args[0]:
             raise
         handle_missing_command(args[0])
         try:
-            proc = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+            proc = subprocess.run(
+                args, cwd=cwd, capture_output=True, text=True, check=False
+            )
         except FileNotFoundError as retry_error:
             if retry_error.filename != args[0]:
                 raise
