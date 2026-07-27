@@ -402,8 +402,22 @@ def wire_fork(p: Project, owner: str, org_flag: list[str]) -> str:
     return ", ".join(notes)
 
 
-def cmd_fork(projects: list[Project], owner: str | None, remove: bool) -> None:
-    cloned = [p for p in projects if p.path.is_dir()]
+def select_part(projects: list[Project], name: str | None) -> list[Project]:
+    """Limit an operation to one named manifest part, or retain every part."""
+    if name is None:
+        return projects
+    selected = [p for p in projects if p.name == name]
+    if not selected:
+        choices = ", ".join(p.name for p in projects)
+        sys.exit(f"error: unknown part {name!r} — choose from: {choices}")
+    return selected
+
+
+def cmd_fork(
+    projects: list[Project], owner: str | None, remove: bool, part: str | None = None
+) -> None:
+    selected = select_part(projects, part)
+    cloned = [p for p in selected if p.path.is_dir()]
     if remove:
         if cloned:
             require_command("git")
@@ -415,15 +429,20 @@ def cmd_fork(projects: list[Project], owner: str | None, remove: bool) -> None:
                 print(f"{p.name:<22} no fork remote")
         print("\nyour GitHub forks are untouched — delete those on github.com if you want")
         return
-    if len(cloned) < len(projects):
-        missing = ", ".join(p.name for p in projects if p not in cloned)
+    if len(cloned) < len(selected):
+        missing = ", ".join(p.name for p in selected if p not in cloned)
         sys.exit(f"error: not cloned yet: {missing} — run nt sync first")
     require_command("git")
     require_command("gh")
     login = gh_login()
-    owner = owner or existing_fork_owner(projects) or login
+    configured_owner = None
+    if owner is None:
+        configured_owner = existing_fork_owner(selected)
+        if configured_owner is None and part is not None:
+            configured_owner = existing_fork_owner(projects)
+    owner = owner or configured_owner or login
     org_flag = ["--org", owner] if owner != login else []
-    for p in projects:
+    for p in selected:
         print(f"{p.name:<22} {wire_fork(p, owner, org_flag)}")
 
 
@@ -490,7 +509,10 @@ def main() -> None:
                     help="GitHub user/org owning the forks "
                          "(default: whatever the remotes already use, else your gh login)")
     fk.add_argument("--remove", action="store_true",
-                    help="remove fork remotes; GitHub forks are left alone")
+                    help="remove local 'fork' remote(s) only; leave origin and "
+                         "GitHub forks unchanged")
+    fk.add_argument("--part", metavar="NAME",
+                    help="operate on one manifest part instead of all parts")
     args = parser.parse_args()
     projects = load_projects()
     match args.cmd:
@@ -503,7 +525,7 @@ def main() -> None:
         case "train":
             cmd_train(projects, args.project)
         case "fork":
-            cmd_fork(projects, args.owner, args.remove)
+            cmd_fork(projects, args.owner, args.remove, args.part)
 
 
 if __name__ == "__main__":

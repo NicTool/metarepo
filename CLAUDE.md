@@ -49,7 +49,9 @@ personal state wired into each clone's git config by `nt fork` — they never
 appear in `mani.yaml`. `nt fork` creates missing GitHub forks, fast-forwards
 existing ones from upstream, and repairs the remotes; it reuses whatever owner
 the remotes already point at. `nt fork --remove` drops the remotes. If a repo
-has no `fork` remote, run `nt fork` before pushing. Never push to `origin`.
+has no `fork` remote, run `nt fork` before pushing. Use
+`nt fork --part <manifest-name>` (and likewise with `--remove`) to operate on
+only one manifest part. Never push to `origin`.
 
 ## Making changes (single repo or a package of changes)
 
