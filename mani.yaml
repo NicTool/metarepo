@@ -18,7 +18,7 @@ projects:
     tags: [v2]
     env:
       pin: master
-      train: "344 355 356 357 358 359"
+      train: "344 357 359"
 
   api:
     path: api
