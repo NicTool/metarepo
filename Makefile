@@ -83,5 +83,5 @@ update: ## Check upstream for newer release tags (make update W=1 to write)
 train: ## Assemble PR integration branches declared in mani.yaml
 	./nt.py train
 
-fork: ## Create GitHub forks and wire 'fork' remotes (make fork OWNER=<user|org>)
-	./nt.py fork $(OWNER)
+fork: ## Create GitHub forks and wire 'fork' remotes (optional PART=<name> OWNER=<user|org>)
+	./nt.py fork $(OWNER) $(if $(PART),--part $(PART))

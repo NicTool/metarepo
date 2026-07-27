@@ -171,12 +171,16 @@ git config, never in `mani.yaml`. One command creates and wires them:
 ```sh
 make fork                  # forks under your gh login
 make fork OWNER=my-org     # or under an org you control
+make fork PART=dns-resource-record  # fork and wire just one manifest part
 ```
 
 This forks any repo you haven't forked yet (via `gh`), adds a `fork` remote to
 every clone, and fast-forwards existing forks from upstream. Re-run it any
 time -- coming back after months away, it re-syncs your forks and repairs
 missing remotes, reusing whatever owner the remotes already point at.
+When `PART=<name>` is supplied, only that manifest part is created, synced,
+or wired; combine it with `OWNER=my-org` when needed. The direct CLI equivalent
+is `./nt.py fork --part dns-resource-record`.
 
 Then branch in the member repo, push to `fork`, and open a PR against
 upstream:
@@ -187,8 +191,9 @@ git -C api push -u fork my-change
 gh pr create --repo NicTool/api --head <owner>:my-change --base main
 ```
 
-Done with forks? `./nt.py fork --remove` drops the remotes; your forks on
-GitHub stay put.
+Done with forks? `./nt.py fork --remove` drops all the remotes, while
+`./nt.py fork --remove --part dns-resource-record` drops only that part's
+remote. Your forks on GitHub stay put.
 
 ## Project structure
 
