@@ -21,6 +21,7 @@ mani.yaml, so the committed manifest carries no usernames.
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -33,6 +34,32 @@ ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "mani.yaml"
 TAG_RE = re.compile(r"v?\d+\.\d+\.\d+$")
 PR_REF = "refs/nt/pr"
+
+
+@dataclass(frozen=True)
+class Requirement:
+    description: str
+    brew_formula: str
+    homepage: str
+
+
+REQUIREMENTS = {
+    "git": Requirement(
+        "Git is required to inspect and manage the workspace repositories.",
+        "git",
+        "https://git-scm.com/downloads",
+    ),
+    "gh": Requirement(
+        "GitHub CLI is required for fork and pull-request operations.",
+        "gh",
+        "https://cli.github.com/",
+    ),
+    "mani": Requirement(
+        "mani is required to clone and synchronize the workspace repositories.",
+        "mani",
+        "https://manicli.com/",
+    ),
+}
 
 
 @dataclass
@@ -52,9 +79,81 @@ class Project:
         return self.url.removeprefix("https://github.com/").removesuffix(".git")
 
 
+def handle_missing_command(command: str) -> None:
+    """Explain a missing prerequisite and optionally install it with Homebrew."""
+    name = Path(command).name
+    requirement = REQUIREMENTS.get(name)
+
+    print(f"error: missing prerequisite: {name}", file=sys.stderr)
+    if requirement:
+        print(f"{requirement.description}\n", file=sys.stderr)
+    else:
+        print(f"nt tried to run '{name}', but it is not on PATH.\n", file=sys.stderr)
+
+    brew = shutil.which("brew")
+    if requirement and brew:
+        install_command = f"brew install {requirement.brew_formula}"
+        print(f"Homebrew can install it:\n  {install_command}", file=sys.stderr)
+        if sys.stdin.isatty():
+            print("\nRun this command now? [y/N] ", end="", file=sys.stderr, flush=True)
+            try:
+                answer = sys.stdin.readline().strip().lower()
+            except KeyboardInterrupt:
+                print(file=sys.stderr)
+                answer = ""
+            if answer in {"y", "yes"}:
+                print(file=sys.stderr)
+                try:
+                    installed = subprocess.run([brew, "install", requirement.brew_formula])
+                except KeyboardInterrupt:
+                    print(f"\nHomebrew installation interrupted; retry with: {install_command}",
+                          file=sys.stderr)
+                    raise SystemExit(130) from None
+                if installed.returncode == 0:
+                    print(f"\n{name} installed; continuing.\n", file=sys.stderr)
+                    return
+                print(f"\nHomebrew could not install {name} (exit {installed.returncode}).",
+                      file=sys.stderr)
+                raise SystemExit(installed.returncode or 1)
+        print(f"\nInstall it, then retry. More information: {requirement.homepage}",
+              file=sys.stderr)
+        raise SystemExit(127)
+
+    if requirement:
+        print(f"Install it, then retry. More information: {requirement.homepage}",
+              file=sys.stderr)
+    else:
+        print(f"Install '{name}', ensure it is on PATH, then retry.", file=sys.stderr)
+    raise SystemExit(127)
+
+
+def require_command(command: str) -> None:
+    """Ensure a prerequisite is available before starting a command."""
+    if shutil.which(command):
+        return
+    handle_missing_command(command)
+    if not shutil.which(command):
+        print(f"error: {command} was installed but is still not on PATH.",
+              file=sys.stderr)
+        print("Start a new shell or update PATH, then retry.", file=sys.stderr)
+        raise SystemExit(127)
+
+
 def sh(args: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
     """Run a command, capturing output; exit with a clear message on failure."""
-    proc = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+    except FileNotFoundError as error:
+        if error.filename != args[0]:
+            raise
+        handle_missing_command(args[0])
+        try:
+            proc = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+        except FileNotFoundError as retry_error:
+            if retry_error.filename != args[0]:
+                raise
+            sys.exit(f"error: {args[0]} was installed but is still not on PATH — "
+                     "start a new shell or update PATH, then retry")
     if check and proc.returncode != 0:
         sys.exit(f"error: {' '.join(args)} (in {cwd or ROOT})\n{proc.stderr.strip()}")
     return proc
@@ -152,6 +251,8 @@ def describe_head(p: Project) -> str:
 
 
 def cmd_status(projects: list[Project]) -> None:
+    if any(p.path.is_dir() for p in projects):
+        require_command("git")
     for p in projects:
         line = describe_head(p) if p.path.is_dir() else "missing: run nt sync"
         print(f"{p.name:<22} {p.pin:<10} {line}")
@@ -187,8 +288,15 @@ def checkout_pin(p: Project) -> str:
 
 
 def cmd_sync(projects: list[Project]) -> None:
-    if sh(["mani", "sync", "--parallel"], check=False).returncode != 0:
-        sys.exit("error: mani sync failed (is mani installed? brew install mani)")
+    require_command("mani")
+    require_command("git")
+    sync = sh(["mani", "sync", "--parallel"], check=False)
+    if sync.returncode != 0:
+        detail = sync.stderr.strip()
+        message = "error: mani sync failed"
+        if detail:
+            message += f":\n{detail}"
+        sys.exit(message)
     for p in projects:
         for note in ensure_remotes(p):
             print(f"{p.name}: {note}")
@@ -223,6 +331,8 @@ def rewrite_pins(changes: dict[str, str]) -> None:
 def cmd_update(projects: list[Project], write: bool) -> None:
     changes = {}
     tagged = [p for p in projects if p.pin_is_tag]
+    if tagged:
+        require_command("git")
     with ThreadPoolExecutor(max_workers=8) as pool:
         latest = dict(zip((p.name for p in tagged), pool.map(latest_stable_tag, tagged)))
     for p in projects:
@@ -288,6 +398,8 @@ def wire_fork(p: Project, owner: str, org_flag: list[str]) -> str:
 def cmd_fork(projects: list[Project], owner: str | None, remove: bool) -> None:
     cloned = [p for p in projects if p.path.is_dir()]
     if remove:
+        if cloned:
+            require_command("git")
         for p in cloned:
             if fork_remote_url(p):
                 git(p.path, "remote", "remove", "fork")
@@ -299,6 +411,8 @@ def cmd_fork(projects: list[Project], owner: str | None, remove: bool) -> None:
     if len(cloned) < len(projects):
         missing = ", ".join(p.name for p in projects if p not in cloned)
         sys.exit(f"error: not cloned yet: {missing} — run nt sync first")
+    require_command("git")
+    require_command("gh")
     login = gh_login()
     owner = owner or existing_fork_owner(projects) or login
     org_flag = ["--org", owner] if owner != login else []
@@ -317,6 +431,8 @@ def cmd_train(projects: list[Project], name: str | None) -> None:
     trains = [p for p in projects if p.train and (name is None or p.name == name)]
     if not trains:
         sys.exit(f"error: no project {'named ' + name if name else ''} with env.train in mani.yaml")
+    require_command("git")
+    require_command("gh")
     for p in trains:
         assemble_train(p)
 
