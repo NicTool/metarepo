@@ -3,7 +3,7 @@
 #
 # mani owns: cloning, .gitignore upkeep, running commands across repos.
 # nt.py owns: pins (env.pin), release updates, PR trains (env.train), and
-# fork remotes (nt fork) — forks are personal state, never recorded here.
+# fork remotes (./nt.py fork) — forks are personal state, never recorded here.
 #
 # env.pin semantics (consumed by nt.py, not mani):
 #   release tag (vX.Y.Z) -> detached checkout at that tag
@@ -18,7 +18,6 @@ projects:
     tags: [v2]
     env:
       pin: master
-      train: "344 357 359"
 
   api:
     path: api
