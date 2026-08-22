@@ -13,3 +13,6 @@ server
 api
 NicTool
 # mani #
+
+# local-only scratch (never committed)
+local/

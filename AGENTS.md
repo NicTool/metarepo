@@ -7,6 +7,13 @@ and provides the shared Docker Compose development environment. It owns
 workspace tooling, configuration, tests, and documentation; member application
 source remains in the Git-ignored repositories declared by `mani.yaml`.
 
+Two companion guides ride along in this repo and apply to all work:
+
+- `AGENTS-elements-of-style.md` — house style for prose: comments, commits, PRs,
+  issues, reviews, docs
+- `AGENTS-architecture-first-principles.md` — engineering doctrine for design
+  decisions in every member repository
+
 ## The manifest is the source of truth
 
 `mani.yaml` declares every member repository, its upstream URL, and its version
@@ -81,11 +88,18 @@ fork branch after `./nt.py fork` reports that it synchronized successfully.
 Keep local feature branches until their work is safely upstream; delete them
 only as a deliberate cleanup action.
 
-## Publishing issues and pull requests
+## Never post to GitHub without human review (hard rule)
 
-Treat GitHub issues and pull requests as human-authored external
-communications. Never create or publish one immediately, even when the task
-initially asks to file an issue or open a PR.
+Nothing agent-authored may appear on GitHub without a human approving the exact
+content first. This applies to every visible artifact: issues, pull requests,
+issue and PR comments, code review submissions, discussions, releases, and any
+other public or collaborator-visible write. Read-only GitHub usage (`gh issue
+view`, `gh pr checks`, searches) is unrestricted; every write needs the gate.
+
+The co-maintainers treat LLM slop on upstream trackers as a serious problem.
+One careless comment costs trust that is expensive to win back.
+
+For issues and PRs specifically:
 
 1. Investigate the behavior and reproduce it when possible. If the reported
    problem cannot be reproduced, stop and report that result; do not invent a
@@ -100,8 +114,10 @@ initially asks to file an issue or open a PR.
 4. After approval, publish the reviewed text unchanged. If new evidence
    requires a material rewrite, present the revised draft for approval again.
 
-Do not use `gh issue create`, `gh pr create`, or an equivalent publishing API
-before this human-review gate has been satisfied.
+Do not use `gh issue create`, `gh pr create`, `gh pr review`, `gh issue
+comment`, or any equivalent publishing API before this human-review gate has
+been satisfied. Pushing commits to the user's own fork is exempt: forks are
+personal state, and a PR is only opened after the gate.
 
 ## Making changes
 
@@ -179,6 +195,25 @@ The legacy container bind-mounts `./NicTool/server` into
 `/usr/local/nictool/server`. Template and htdocs edits are immediately visible.
 Install changed Perl libraries inside the container because Apache loads them
 from the installed path.
+
+### Container runtime on this Mac
+
+docker runs through colima, which is not started at boot. If `docker ps`
+fails with a socket error, run `colima start` first. The VM uses the vz
+backend (macOS Virtualization.Framework) with virtiofs mounts and rosetta;
+recreate it with `colima delete` + `colima start --vm-type=vz
+--vz-rosetta --mount-type virtiofs` if it ever needs rebuilding. Deleting the
+VM loses images and volumes; the db re-initializes from `api/sql` on next
+`make up`.
+
+`make env` (via `docker/generate-env.sh`) generates `docker/.env` only if
+missing. The db bakes credentials in at first initialization, so regenerating
+`.env` later orphans the existing `db-data` volume — wipe it (`make clean`)
+and let init run again rather than debugging access-denied errors.
+
+Known issue as of api v3.0.3: 4 nameserver route tests fail because the
+`^0.9.1` validate range resolves to 0.9.2, which removed `export.type`.
+Fixed on api main by #58; ignore these failures until api releases it.
 
 ## Worktrees
 
