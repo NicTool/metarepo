@@ -1,8 +1,9 @@
 # NicTool Metarepo
 
-This pulls together every piece of the NicTool DNS management stack -- the legacy Perl v2, the Node.js v3 API and web UI, shared libraries, and research notes -- so you can run them side by side from a single `docker compose up`.
-
-The idea is straightforward: v2 running next to v3, sharing the same MariaDB, on the same machine. Compare behavior, contribute to v3, run end-to-end tests across both generations.
+This repo pulls together v2 and v3 of NicTool so you can run them side by side
+from one workspace. For now it's used to run v2 alongside v3 against the same
+DB, compare behaviour, run end-to-end tests, etc., all toward hastening the
+release of v3 through the good graces of Sir Simerson.
 
 ## What's in here
 
@@ -10,55 +11,49 @@ The idea is straightforward: v2 running next to v3, sharing the same MariaDB, on
 |------|-----------|----------|
 | `api/` | v3 REST API (Hapi, MySQL2) | [NicTool/api](https://github.com/NicTool/api) |
 | `server/` | v3 Web UI + configurator | [NicTool/server](https://github.com/NicTool/server) |
-| `NicTool/` | Legacy Perl v2 (Apache + mod_perl) | [NicTool/NicTool](https://github.com/NicTool/NicTool) |
+| `NicTool/` | old-school Perl v2 (Apache + mod_perl) | [NicTool/NicTool](https://github.com/NicTool/NicTool) |
 | `libs/validate/` | Joi-based DNS object validation | [NicTool/validate](https://github.com/NicTool/validate) |
-| `libs/dns-zone/` | Zone import/export (BIND, tinydns, maradns, JSON) | [NicTool/dns-zone](https://github.com/NicTool/dns-zone) |
+| `libs/dns-zone/` | Zone import/export (BIND, tinydns, JSON, whatever) | [NicTool/dns-zone](https://github.com/NicTool/dns-zone) |
 | `libs/dns-nameserver/` | Nameserver management | [NicTool/dns-nameserver](https://github.com/NicTool/dns-nameserver) |
 | `libs/dns-resource-record/` | Resource record handling | [NicTool/dns-resource-record](https://github.com/NicTool/dns-resource-record) |
-| `research/` | LLM-generated audits, gap analyses, design notes | [NicTool/research](https://github.com/NicTool/research) |
+| `research/` | LLM-assisted audits, gap analyses, design notes | [NicTool/research](https://github.com/NicTool/research) |
 
-Every path is a plain git clone, declared in `mani.yaml` — the manifest that records which repos and which versions belong together. [mani](https://manicli.com) clones and enumerates them; `nt.py` keeps each checkout at its pinned release tag or branch (see below).
+Every path is a plain git clone, declared in `mani.yaml` — the manifest that records which repos and which versions belong together. [mani](https://manicli.com) clones and enumerates them; Vibe-coded `nt.py` keeps each checkout at its pinned release tag or branch (see below).
 
 ## Prerequisites
 
-A handful of things on a fresh macOS machine. Everything else (Node 22, MariaDB 11, Perl) runs inside Docker containers.
+The idea is to require only a few deps on a fresh macOS machine, with everything
+else such as node, db, perl, etc. running inside docker containers.
 
-Homebrew, if you don't already have it:
-
-```sh
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-Then install the rest:
+Start with [Homebrew](https://brew.sh/) and a clean docker environment such as [colima](https://colima.run/):
 
 ```sh
 brew install colima docker docker-compose git mani uv gh
 colima start
 ```
 
-[mani](https://manicli.com) manages the member repos, [uv](https://docs.astral.sh/uv/) runs the workspace tool `nt.py`, and `gh` talks to GitHub for PR trains and release checks.
+[mani](https://manicli.com) manages the member repos, [uv](https://docs.astral.sh/uv/) runs the workspace tool `nt.py`, and `gh` talks to GitHub. There should be no special Perl or nodejs dependency dance required on your workstation.
 
-We use [Colima](https://github.com/abiosoft/colima) as the container runtime -- it's free, lightweight, and doesn't require a Docker Desktop license. Colima needs to be running before any `docker compose` or `make up-*` commands work. After a reboot, just `colima start` again.
+> [Podman](https://podman.io/) should also work, but the Makefile and compose file are written for the Docker CLI.
 
-> [Podman](https://podman.io/) also works if you prefer it, but the Makefile and compose file are written for the Docker CLI.
-
-No Perl setup needed on your host -- the legacy v2 stack runs entirely inside Docker.
 
 ## Getting started
 
-Clone, initialize, generate credentials, and bring up the stack:
+Clone, init, generate credentials, and bring up the full stack:
 
 ```sh
 git clone https://github.com/NicTool/metarepo.git
 cd metarepo
 make init
 make env
-make up
+make up-all
 ```
 
-`make init` clones every repo in `mani.yaml` and checks each out at its pinned version. Node.js dependencies are installed inside the Docker containers during `make up`, so nothing is installed on your host.
+`make init` clones every repo in `mani.yaml` and checks each out at its pinned
+version. `make up-all` then installs the component deps inside the docker
+containers.
 
-Day to day, three commands keep the workspace honest:
+Day to day, three commands keep the workspace tidy:
 
 ```sh
 make status       # drift report: where is each repo vs its pin?
@@ -66,23 +61,26 @@ make sync         # fetch everything, move clean repos to their pins
 make update       # any newer upstream releases? (make update W=1 writes them)
 ```
 
-`nt.py` never touches a repo that has uncommitted changes or a checked-out
-work branch — active work always wins over the manifest.
+`nt.py` should never touch a repo that has uncommitted changes or a checked-out
+work branch; active work takes precedence over the pre-defined mani-fest.
 
-`make env` creates `docker/.env` with randomly generated passwords via `openssl rand` -- it won't overwrite an existing file, so it's safe to run more than once. Edit `docker/.env` directly to customize ports or credentials (see `docker/.env.example` for the full list).
+`make env` creates `docker/.env`, if it doesn't already exist, with randomly
+generated passwords via `openssl rand`. Edit `docker/.env` directly to
+customize ports or credentials (see `docker/.env.example` for the full list).
 
-Pick whichever slice of the stack you need:
+Working on a sub-part of the full NicTool v2+v3 stack is also possible:
 
 ```sh
-make up          # v3 core (MariaDB + API)
-make up-ui       # v3 full stack (MariaDB + API + Web UI)
-make up-legacy   # Legacy Perl v2 (MariaDB + NicTool v2)
+make up          # v3 core (DB + API)
+make up-ui       # v3 full stack (DB + API + Web UI)
+make up-legacy   # Legacy Perl v2 (DB + API + NicTool v2)
 make up-all      # Everything at once
 ```
 
-The first run builds all Docker images, which takes a few minutes. After that, layer caching keeps it fast.
+The first run without a cache builds the selected docker images, so it may take
+a while.
 
-Once the containers are healthy:
+Once the containers are healthy, defaults are:
 
 | Service | URL | What you should see |
 |---------|-----|---------------------|
@@ -90,9 +88,7 @@ Once the containers are healthy:
 | v3 Web UI | http://localhost:8080 | NicTool v3 login page |
 | v2 Legacy (HTTP) | http://localhost:8082 | Classic NicTool login page |
 | v2 Legacy (HTTPS) | https://localhost:8443 | Same, with self-signed cert |
-| MariaDB | `localhost:3307` | Connect with any MySQL client |
-
-All ports are configurable in `docker/.env`.
+| DB | `localhost:3307` | Connect with any MySQL client |
 
 ## Docker Compose profiles
 
@@ -100,13 +96,13 @@ All ports are configurable in `docker/.env`.
 |---------|-----------------|
 | *(default)* | `db` + `api` |
 | `ui` | `db` + `api` + `server` |
-| `legacy` | `db` + `nictool-legacy` |
+| `legacy` | `db` + `api` + `nictool-legacy` |
 | `e2e` | `db` + `api` + `server` |
 | `all` | All four services |
 
 ## Testing
 
-All tests run inside containers -- nothing is installed on your host.
+All tests run inside containers.
 
 ```sh
 make test           # API + library tests (requires make up)
@@ -115,16 +111,18 @@ make test-server    # just the server tests (requires make up-ui)
 make test-libs      # just the four libraries (no running services needed)
 ```
 
-`make test-api` and `make test-server` exec into the running containers. `make test-libs` spins up ephemeral `node:22` containers for each library. The API integration tests need a running database, so run `make up` first.
+`make test-api` and `make test-server` exec into the running containers.
+`make test-libs` spins up ephemeral `node:22` containers for each library.
+The API integration tests require `make up` first.
 
-The v2 container has its own Perl test suites. These run inside the container against the shared MariaDB:
+The v2 container has its own Perl test suites running inside the container against the shared DB:
 
 ```sh
 make test-v2      # runs everything below in sequence
 make test-v2-xt   # just the extended tests (see below)
 ```
 
-`make test-v2` runs three things in order: the server unit tests, the client unit tests, and then the extended ("xt") integration tests. The xt tests exercise cross-group permissions, zone delegation, and other multi-object interactions that require a running database with seeded data. `make test-v2-xt` runs only that last step, which is useful when you're iterating on permission or delegation logic and don't want to wait for the full suite.
+`make test-v2` runs three things in order: the server unit tests, the client unit tests, and then the extended ("xt") integration tests. The xt tests exercise cross-group permissions, zone delegation, and other multi-object interactions that require a running database with seeded data. `make test-v2-xt` runs only that last step, which is useful when you're iterating on extended permission or delegation logic.
 
 ## Local development
 
@@ -135,7 +133,9 @@ docker compose --env-file docker/.env --profile all restart   # restart all
 docker compose --env-file docker/.env restart api              # restart one
 ```
 
-You only need `--build` when you change a Dockerfile or dependencies (`package.json`, `Makefile.PL`).
+Rebuild after changing a Dockerfile. If `package.json` or `Makefile.PL` changes,
+reinstall the deps inside the affected container; an existing dependency volume
+may survive an image rebuild.
 
 Tear down when you're done:
 
@@ -153,7 +153,6 @@ make clean        # stop everything and delete volumes (fresh start)
 make status       # drift report for all repos
 make sync         # fetch all repos, move clean ones to their pins
 make update       # check upstream for newer release tags
-make train        # assemble PR integration branches from mani.yaml
 make test         # run v3 API + library tests (requires make up)
 make test-api     # run v3 API tests only
 make test-server  # run v3 server tests only (requires make up-ui)
@@ -165,8 +164,9 @@ make test-v2-xt   # run only v2 extended integration tests (permissions, delegat
 ## Contributing from a fork
 
 The manifest only knows about upstream -- `origin` in every repo points at
-`NicTool/*` and is read-only. Forks are personal, so they live in each clone's
-git config, never in `mani.yaml`. One command creates and wires them:
+`NicTool/*` and is likely read-only. Personal forks live in each clone's
+git config rather than in `mani.yaml`. This shortcut can create all of the forks
+and wire them up for you:
 
 ```sh
 make fork                  # forks under your gh login
@@ -176,7 +176,7 @@ make fork PART=dns-resource-record  # fork and wire just one manifest part
 
 This forks any repo you haven't forked yet (via `gh`), adds a `fork` remote to
 every clone, and fast-forwards existing forks from upstream. Re-run it any
-time -- coming back after months away, it re-syncs your forks and repairs
+time -- coming back after days away, it re-syncs your forks and repairs
 missing remotes, reusing whatever owner the remotes already point at.
 When `PART=<name>` is supplied, only that manifest part is created, synced,
 or wired; combine it with `OWNER=my-org` when needed. The direct CLI equivalent
@@ -205,8 +205,8 @@ metarepo/
     generate-env.sh       # creates .env with random passwords
   docker-compose.yml      # all services, all profiles
   Makefile                # task runner
-  mani.yaml               # manifest: repos, pins, PR trains
-  nt.py                   # workspace tool: sync / status / update / train / fork
+  mani.yaml               # manifest: repos and pins
+  nt.py                   # workspace tool: sync / status / update / fork
   api/                    # [repo] v3 REST API
   server/                 # [repo] v3 Web UI
   NicTool/                # [repo] Legacy Perl v2
@@ -218,10 +218,13 @@ metarepo/
     dns-resource-record/  # [repo] resource record handling
 ```
 
-Member repos are gitignored — this workspace records *intent* (pins, trains)
+Member repos are gitignored — this workspace records *intent* through the pins
 in `mani.yaml`, never member-repo content.
 
-## Known issues
+## Issues and feedback
 
-- `/swagger.json` returns a 500 due to a Joi version mismatch between the API and the swagger plugin. The API itself works fine -- it's just the generated schema that breaks.
-- The legacy v2 entrypoint generates a test user (`nictest@test_group`) with a random password stored at `/usr/local/nictool/server/t/test.cfg` inside the container.
+There really shouldn't be any component-specific issues listed here. Check the
+open issues and PRs for the relevant sub-project instead.
+
+This metarepo is a work in progress; contributions and feedback would be quite
+welcome.
