@@ -1,4 +1,4 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-server test-libs test-v2 test-v2-xt logs sync status update train fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-xt logs sync status update train fork
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -50,6 +50,12 @@ test: test-api test-libs ## Run v3 API + library tests (requires make up)
 
 test-api: ## Run API tests (requires make up)
 	docker compose --env-file docker/.env exec -T api npm test
+
+test-api-backends: ## Run API tests against every data store backend (requires make up)
+	@for backend in mysql json toml; do \
+		echo "==> api tests, $$backend store"; \
+		docker compose --env-file docker/.env exec -T -e NICTOOL_DATA_STORE=$$backend api sh test/run.sh || exit 1; \
+	done
 
 test-server: ## Run server tests (requires make up-ui)
 	docker compose --env-file docker/.env --profile ui exec -T server npm test
