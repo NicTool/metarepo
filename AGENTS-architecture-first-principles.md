@@ -29,6 +29,11 @@ class and what it means in a document store is another. New backends extend by
 adding a broker, not by touching the core. Denormalizing into a document store
 is fine; the data is small and speed wins arguments.
 
+In the v3 api this is the `lib/<entity>/store/` layout: a `base.js` interface,
+per-backend implementations, and import-time selection via `storeType()`. The
+mechanics — and the hard rule against reaching past the seam — live in
+`AGENTS.md`.
+
 ## small data fits in ram
 
 Tens of thousands of zones fit in a few megabytes. Design serving on the

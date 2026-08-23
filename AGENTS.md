@@ -169,6 +169,36 @@ Keep comments rare and high-signal.
 - Review every added comment before pushing; remove anything that does not
   protect understanding or correctness.
 
+## Data access goes through the store layer (hard rule)
+
+v3's data stores are pluggable by design: every entity reaches its backend
+through `lib/<entity>/store/` — a `base.js` interface contract, `mysql.js`,
+`file.js` (json/toml), and stubs for backends not yet implemented — selected at
+import time by `storeType()`. mysql is the complete backend today; mongodb and
+elasticsearch are declared stubs whose every method throws `not yet
+implemented`.
+
+New code must not import `Mysql` directly. Queries belong behind an interface
+method in a store module. A subsystem with no file-store implementation gets a
+loud stub, not a silent hard dependency on mysql. This is what keeps "ditch SQL
+entirely" and browser-mode ("look ma, no server!") reachable instead of
+aspirational — see "brokers over backends" in
+`AGENTS-architecture-first-principles.md`.
+
+When reviewing, treat a direct `mysql2` import outside a `store/` module as a
+blocking finding, the same category as a bypassed permission check. A test in
+the api (`lib/store-access.test.js`) fails on any such import; keep it green.
+
+## Word choice
+
+Write like the maintainer, not like an LLM. Never use these tell-tale words in
+code, comments, commit messages, PRs, issues, or replies: *seam*, *load-bearing*,
+*ratchet*, *leverage*, *robust*, *seamless*, *ecosystem*, *delve*, *tapestry*,
+*landscape*, *realm*, *utilize*, *supercharge*, *unlock*, *crucial*, *pivotal*.
+Prefer plain direct words and the project's own vocabulary: store, backend,
+broker, query, export. If a sentence sounds like a press release, shorten it
+until it doesn't.
+
 ## Docker environment
 
 | Service | Purpose | Internal hostname | Port |
