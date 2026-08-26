@@ -1,0 +1,33 @@
+import unittest
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+VALIDATE_HEAD = "c3b37de5fcf42de94c02fa9c97d5a2323fe9cafb"
+
+
+def compose() -> dict:
+    return yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+
+
+class ComposeTests(unittest.TestCase):
+    def test_api_builds_with_the_proposed_validate_by_default(self):
+        spec = compose()["services"]["api"]["build"]["args"]["NICTOOL_VALIDATE_SPEC"]
+
+        self.assertTrue(spec.startswith("${NICTOOL_VALIDATE_SPEC:-"))
+        self.assertIn(VALIDATE_HEAD, spec)
+
+    def test_legacy_gui_defaults_to_rest_against_the_api(self):
+        legacy = compose()["services"]["nictool-legacy"]
+        env = legacy["environment"]
+
+        self.assertEqual(env["NICTOOL_DATA_PROTOCOL"], "${NICTOOL_DATA_PROTOCOL:-rest}")
+        self.assertEqual(env["NICTOOL_SERVER_HOST"], "${NICTOOL_SERVER_HOST:-api}")
+        self.assertEqual(env["NICTOOL_SERVER_PORT"], "${NICTOOL_SERVER_PORT:-3000}")
+        self.assertEqual(env["DB_PORT"], "3306")
+        self.assertIn("api", legacy["depends_on"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -100,6 +100,23 @@ Once the containers are healthy, defaults are:
 | `e2e` | `db` + `api` + `server` |
 | `all` | All four services |
 
+The v2 GUI in `nictool-legacy` talks to the v3 api over REST. To point it back
+at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
+`NICTOOL_SERVER_HOST=localhost`, and `NICTOOL_SERVER_PORT=8082` in
+`docker/.env`. The v2 test targets set their protocol explicitly either way.
+
+## Proposed validate
+
+The api pins `@nictool/validate` at `^0.9.1`, but the REST bridge needs
+NicTool/validate#29. Until that ships as 0.9.3, `docker-compose.yml` builds the
+api with `NICTOOL_VALIDATE_SPEC` defaulting to the PR head (c3b37de), the same
+source the api's CI installs. Once 0.9.3 is released and the api depends on
+`^0.9.3`, drop the default here and the pins in the api's `.github/workflows`.
+
+`api_node_modules` is a named volume seeded from the image on first start, so a
+changed spec only takes effect after `make clean` (or `docker volume rm
+nictool-metarepo_api_node_modules`).
+
 ## Testing
 
 All tests run inside containers.

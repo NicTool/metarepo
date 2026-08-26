@@ -27,7 +27,8 @@ services:
       context: ./api
       dockerfile: docker/Dockerfile
       args:
-        NICTOOL_VALIDATE_SPEC: ${NICTOOL_VALIDATE_SPEC:-}
+        # proposed validate (NicTool/validate#29) until it ships as 0.9.3
+        NICTOOL_VALIDATE_SPEC: ${NICTOOL_VALIDATE_SPEC:-https://github.com/aberoham/validate/archive/c3b37de5fcf42de94c02fa9c97d5a2323fe9cafb.tar.gz}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
@@ -87,6 +88,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      api:
+        condition: service_healthy
     volumes:
       - ./NicTool/server:/usr/local/nictool/server
       - ./NicTool/client:/usr/local/nictool/client
@@ -95,6 +98,11 @@ services:
     environment:
       DB_ENGINE: mysql
       DB_HOSTNAME: db
+      DB_PORT: "3306"
+      # the v2 GUI talks to the v3 api; SOAP test targets set their own env
+      NICTOOL_DATA_PROTOCOL: ${NICTOOL_DATA_PROTOCOL:-rest}
+      NICTOOL_SERVER_HOST: ${NICTOOL_SERVER_HOST:-api}
+      NICTOOL_SERVER_PORT: ${NICTOOL_SERVER_PORT:-3000}
     healthcheck:
       test: ["CMD", "curl", "-fso", "/dev/null", "http://localhost/index.cgi"]
       interval: 10s
