@@ -213,6 +213,7 @@ make up            # db + api
 make test          # v3 API + library tests
 make up-legacy     # db + v2 Perl
 make test-v2-xt    # v2 SOAP extended tests
+make test-v2-rest  # supported v2 REST bridge extended tests
 ```
 
 Run commands in the legacy container with:

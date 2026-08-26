@@ -1,4 +1,8 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-xt logs sync status update train fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
+
+V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
+V2_SOAP_ENV = -e NICTOOL_DATA_PROTOCOL=soap -e NICTOOL_SERVER_HOST=localhost -e NICTOOL_SERVER_PORT=8082 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test.cfg
+V2_REST_ENV = -e NICTOOL_DATA_PROTOCOL=rest -e NICTOOL_SERVER_HOST=api -e NICTOOL_SERVER_PORT=3000 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test-rest.cfg
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -66,13 +70,28 @@ test-libs: ## Run library tests (no running services needed)
 		docker run --rm -v $$(pwd)/libs/$$lib:/app -w /app node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test"; \
 	done
 
-test-v2-xt: ## Run NicTool v2 permission & delegation tests (requires up-legacy)
-	docker compose --env-file docker/.env --profile legacy exec -T nictool-legacy bash -c 'cd /usr/local/nictool/server && prove -v xt/*.t'
+test-v2-unit: ## Run NicTool v2 unit tests with SOAP defaults (requires up-legacy)
+	$(V2_EXEC) $(V2_SOAP_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && perl Makefile.PL && make test'
+	$(V2_EXEC) $(V2_SOAP_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/client && perl Makefile.PL && make test'
 
-test-v2: ## Run all NicTool v2 tests (requires up-legacy)
-	docker compose --env-file docker/.env --profile legacy exec -T nictool-legacy bash -c 'cd /usr/local/nictool/server && perl Makefile.PL && make test'
-	docker compose --env-file docker/.env --profile legacy exec -T nictool-legacy bash -c 'cd /usr/local/nictool/client && perl Makefile.PL && make test'
-	$(MAKE) test-v2-xt
+test-v2-xt-soap: ## Run all NicTool v2 extended tests through SOAP (requires up-legacy)
+	$(V2_EXEC) $(V2_SOAP_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && prove -v xt/*.t'
+
+test-v2-xt-rest: ## Run the supported NicTool v2 extended tests through REST (requires up-legacy)
+	$(V2_EXEC) $(V2_REST_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && prove -v xt/14_permissions.t xt/16_delegation.t xt/20_permission.t'
+
+test-v2-soap: ## Run all NicTool v2 SOAP tests (requires up-legacy)
+	$(MAKE) test-v2-unit
+	$(MAKE) test-v2-xt-soap
+
+test-v2-rest: ## Run the NicTool v2 REST bridge tests (requires up-legacy)
+	$(MAKE) test-v2-xt-rest
+
+test-v2-xt: ## Run all NicTool v2 extended tests through SOAP (requires up-legacy)
+	$(MAKE) test-v2-xt-soap
+
+test-v2: ## Run all NicTool v2 SOAP tests (requires up-legacy)
+	$(MAKE) test-v2-soap
 
 logs: ## Tail all service logs
 	docker compose --profile all logs -f
