@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-VALIDATE_HEAD = "c3b37de5fcf42de94c02fa9c97d5a2323fe9cafb"
+VALIDATE_HEAD = "a4d07855a3afe824d7d1d754550cb2d9a75fb145"
 
 
 def compose() -> dict:

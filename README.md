@@ -109,7 +109,7 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 
 The api pins `@nictool/validate` at `^0.9.1`, but the REST bridge needs
 NicTool/validate#29. Until that ships as 0.9.3, `docker-compose.yml` builds the
-api with `NICTOOL_VALIDATE_SPEC` defaulting to the PR head (c3b37de), the same
+api with `NICTOOL_VALIDATE_SPEC` defaulting to the PR head (a4d0785), the same
 source the api's CI installs, and then mounts `libs/validate` over the installed
 copy so the api runs whatever the manifest checked out. The build still matters:
 it is where validate's own dependencies get installed. Once 0.9.3 is released
