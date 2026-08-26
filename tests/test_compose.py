@@ -18,6 +18,11 @@ class ComposeTests(unittest.TestCase):
         self.assertTrue(spec.startswith("${NICTOOL_VALIDATE_SPEC:-"))
         self.assertIn(VALIDATE_HEAD, spec)
 
+    def test_api_runs_the_manifest_validate_checkout(self):
+        volumes = compose()["services"]["api"]["volumes"]
+
+        self.assertIn("./libs/validate:/app/node_modules/@nictool/validate", volumes)
+
     def test_legacy_gui_defaults_to_rest_against_the_api(self):
         legacy = compose()["services"]["nictool-legacy"]
         env = legacy["environment"]

@@ -110,8 +110,11 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 The api pins `@nictool/validate` at `^0.9.1`, but the REST bridge needs
 NicTool/validate#29. Until that ships as 0.9.3, `docker-compose.yml` builds the
 api with `NICTOOL_VALIDATE_SPEC` defaulting to the PR head (c3b37de), the same
-source the api's CI installs. Once 0.9.3 is released and the api depends on
-`^0.9.3`, drop the default here and the pins in the api's `.github/workflows`.
+source the api's CI installs, and then mounts `libs/validate` over the installed
+copy so the api runs whatever the manifest checked out. The build still matters:
+it is where validate's own dependencies get installed. Once 0.9.3 is released
+and the api depends on `^0.9.3`, drop the default here and the pins in the api's
+`.github/workflows`.
 
 `api_node_modules` is a named volume seeded from the image on first start, so a
 changed spec only takes effect after `make clean` (or `docker volume rm
