@@ -35,6 +35,16 @@ class V2TestTargetTests(unittest.TestCase):
         )
         self.assertNotIn("prove -v xt/*.t", output)
 
+    def test_rest_browser_target_uses_generated_account_and_group(self):
+        output = make_dry_run("test-v2-e2e-rest")
+
+        self.assertIn("username", output)
+        self.assertIn("password", output)
+        self.assertIn("test_gid", output)
+        self.assertIn('NICTOOL_TEST_USER="$user"', output)
+        self.assertIn('NICTOOL_TEST_PASSWORD="$password"', output)
+        self.assertIn('NICTOOL_TEST_GID="$test_gid"', output)
+
 
 if __name__ == "__main__":
     unittest.main()

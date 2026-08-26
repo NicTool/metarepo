@@ -1,4 +1,4 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
 
 V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
 V2_SOAP_ENV = -e NICTOOL_DATA_PROTOCOL=soap -e NICTOOL_SERVER_HOST=localhost -e NICTOOL_SERVER_PORT=8082 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test.cfg
@@ -44,11 +44,11 @@ up-legacy: env check-ports ## Start db + legacy Perl NicTool
 up-all: env check-ports ## Start everything
 	docker compose --env-file docker/.env --profile all up --build -d --wait
 
-down: ## Stop all services
-	docker compose --profile all down
+down: env ## Stop all services
+	docker compose --env-file docker/.env --profile all down
 
-clean: ## Stop all and remove volumes
-	docker compose --profile all down -v
+clean: env ## Stop all and remove volumes
+	docker compose --env-file docker/.env --profile all down -v
 
 test: test-api test-libs ## Run v3 API + library tests (requires make up)
 
@@ -87,14 +87,24 @@ test-v2-soap: ## Run all NicTool v2 SOAP tests (requires up-legacy)
 test-v2-rest: ## Run the NicTool v2 REST bridge tests (requires up-legacy)
 	$(MAKE) test-v2-xt-rest
 
+test-v2-e2e-rest: ## Run the v2 browser suite through REST (requires up-legacy)
+	@user=$$(sed -n "s/^[[:space:]]*username[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
+	password=$$(sed -n "s/^[[:space:]]*password[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
+	test_gid=$$(sed -n "s/^[[:space:]]*test_gid[[:space:]]*=>[[:space:]]*\([0-9][0-9]*\).*/\1/p" NicTool/server/t/test-rest.cfg); \
+	if [ -z "$$user" ] || [ -z "$$password" ] || [ -z "$$test_gid" ]; then \
+		echo "REST browser test settings are missing; recreate nictool-legacy" >&2; exit 1; \
+	fi; \
+	cd NicTool/client/t/e2e && \
+	NICTOOL_TEST_USER="$$user" NICTOOL_TEST_PASSWORD="$$password" NICTOOL_TEST_GID="$$test_gid" npm test
+
 test-v2-xt: ## Run all NicTool v2 extended tests through SOAP (requires up-legacy)
 	$(MAKE) test-v2-xt-soap
 
 test-v2: ## Run all NicTool v2 SOAP tests (requires up-legacy)
 	$(MAKE) test-v2-soap
 
-logs: ## Tail all service logs
-	docker compose --profile all logs -f
+logs: env ## Tail all service logs
+	docker compose --env-file docker/.env --profile all logs -f
 
 sync: ## Fetch all repos, move clean ones to their manifest pins
 	./nt.py sync
