@@ -213,6 +213,7 @@ make up            # db + api
 make test          # v3 API + library tests
 make up-legacy     # db + v2 Perl
 make test-v2-xt    # v2 SOAP extended tests
+make test-v2-rest  # supported v2 REST bridge extended tests
 ```
 
 Run commands in the legacy container with:
@@ -241,9 +242,9 @@ missing. The db bakes credentials in at first initialization, so regenerating
 `.env` later orphans the existing `db-data` volume — wipe it (`make clean`)
 and let init run again rather than debugging access-denied errors.
 
-Known issue as of api v3.0.3: 4 nameserver route tests fail because the
-`^0.9.1` validate range resolves to 0.9.2, which removed `export.type`.
-Fixed on api main by #58; ignore these failures until api releases it.
+While NicTool/validate#29 is in flight, the api builds with a proposed
+validate source pinned in `docker-compose.yml` and runs the `libs/validate`
+checkout; README's "Proposed validate" section covers the pin and its removal.
 
 ## Worktrees
 

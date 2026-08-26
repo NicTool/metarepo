@@ -100,6 +100,26 @@ Once the containers are healthy, defaults are:
 | `e2e` | `db` + `api` + `server` |
 | `all` | All four services |
 
+The v2 GUI in `nictool-legacy` talks to the v3 api over REST. To point it back
+at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
+`NICTOOL_SERVER_HOST=localhost`, and `NICTOOL_SERVER_PORT=8082` in
+`docker/.env`. The v2 test targets set their protocol explicitly either way.
+
+## Proposed validate
+
+The api pins `@nictool/validate` at `^0.9.1`, but the REST bridge needs
+NicTool/validate#29. Until that ships as 0.9.3, `docker-compose.yml` builds the
+api with `NICTOOL_VALIDATE_SPEC` defaulting to the PR head (a4d0785), the same
+source the api's CI installs, and then mounts `libs/validate` over the installed
+copy so the api runs whatever the manifest checked out. The build still matters:
+it is where validate's own dependencies get installed. Once 0.9.3 is released
+and the api depends on `^0.9.3`, drop the default here and the pins in the api's
+`.github/workflows`.
+
+`api_node_modules` is a named volume seeded from the image on first start, so a
+changed spec only takes effect after `make clean` (or `docker volume rm
+nictool-metarepo_api_node_modules`).
+
 ## Testing
 
 All tests run inside containers.
@@ -118,11 +138,19 @@ The API integration tests require `make up` first.
 The v2 container has its own Perl test suites running inside the container against the shared DB:
 
 ```sh
-make test-v2      # runs everything below in sequence
-make test-v2-xt   # just the extended tests (see below)
+make test-v2          # all v2 unit and extended tests through SOAP
+make test-v2-soap     # explicit name for make test-v2
+make test-v2-rest     # supported REST bridge extended tests
+make test-v2-unit     # server and client unit tests with SOAP defaults
+make test-v2-xt       # all extended tests through SOAP
+make test-v2-xt-rest  # supported extended tests through REST
 ```
 
-`make test-v2` runs three things in order: the server unit tests, the client unit tests, and then the extended ("xt") integration tests. The xt tests exercise cross-group permissions, zone delegation, and other multi-object interactions that require a running database with seeded data. `make test-v2-xt` runs only that last step, which is useful when you're iterating on extended permission or delegation logic.
+`make test-v2` and `make test-v2-soap` run the server and client unit tests,
+then every extended ("xt") test through SOAP. The REST bridge target runs
+`xt/14_permissions.t`, `xt/16_delegation.t`, and `xt/20_permission.t`, the
+extended tests supported by both protocols. Each target sets its endpoint,
+protocol, and test config explicitly, regardless of the container defaults.
 
 ## Local development
 
@@ -157,8 +185,9 @@ make test         # run v3 API + library tests (requires make up)
 make test-api     # run v3 API tests only
 make test-server  # run v3 server tests only (requires make up-ui)
 make test-libs    # run library tests (no running services needed)
-make test-v2      # run all v2 Perl tests (server, client, and extended; requires up-legacy)
-make test-v2-xt   # run only v2 extended integration tests (permissions, delegation)
+make test-v2       # run all v2 unit and extended tests through SOAP
+make test-v2-rest  # run the supported v2 extended tests through REST
+make test-v2-xt    # run all v2 extended tests through SOAP
 ```
 
 ## Contributing from a fork
