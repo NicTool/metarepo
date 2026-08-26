@@ -98,6 +98,7 @@ Once the containers are healthy, defaults are:
 | `ui` | `db` + `api` + `server` |
 | `legacy` | `db` + `api` + `nictool-legacy` |
 | `e2e` | `db` + `api` + `server` |
+| `test` | One-off v2 Playwright runner |
 | `all` | All four services |
 
 The v2 GUI in `nictool-legacy` talks to the v3 api over REST. To point it back
@@ -105,16 +106,24 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 `NICTOOL_SERVER_HOST=localhost`, and `NICTOOL_SERVER_PORT=8082` in
 `docker/.env`. The v2 test targets set their protocol explicitly either way.
 
-## Proposed validate
+## REST bridge integration
 
-The api pins `@nictool/validate` at `^0.9.1`, but the REST bridge needs
-NicTool/validate#29. Until that ships as 0.9.3, `docker-compose.yml` builds the
-api with `NICTOOL_VALIDATE_SPEC` defaulting to the PR head (a4d0785), the same
-source the api's CI installs, and then mounts `libs/validate` over the installed
-copy so the api runs whatever the manifest checked out. The build still matters:
-it is where validate's own dependencies get installed. Once 0.9.3 is released
-and the api depends on `^0.9.3`, drop the default here and the pins in the api's
-`.github/workflows`.
+While api#61 and NicTool#365 are open, `mani.yaml` declares trains for both. A
+fresh workspace can assemble the exact integration branches without recording a
+personal fork:
+
+```sh
+make init
+make train
+```
+
+validate#29 shipped as `@nictool/validate` 1.0.0, but the api still depends on
+`^0.9.1`, so `docker-compose.yml` builds it with `NICTOOL_VALIDATE_SPEC`
+defaulting to `@nictool/validate@1.0.0`. The manifest checkout is mounted over
+the installed copy at runtime; the image install supplies validate's
+dependencies. Once the api depends on `^1.0.0` and the companion PRs are merged
+and released, remove the manifest trains, restore the release pins, and drop
+the spec default here.
 
 `api_node_modules` is a named volume seeded from the image on first start, so a
 changed spec only takes effect after `make clean` (or `docker volume rm
@@ -141,6 +150,7 @@ The v2 container has its own Perl test suites running inside the container again
 make test-v2          # all v2 unit and extended tests through SOAP
 make test-v2-soap     # explicit name for make test-v2
 make test-v2-rest     # supported REST bridge extended tests
+make test-v2-e2e-rest # v2 browser suite through REST
 make test-v2-unit     # server and client unit tests with SOAP defaults
 make test-v2-xt       # all extended tests through SOAP
 make test-v2-xt-rest  # supported extended tests through REST
@@ -151,6 +161,8 @@ then every extended ("xt") test through SOAP. The REST bridge target runs
 `xt/14_permissions.t`, `xt/16_delegation.t`, and `xt/20_permission.t`, the
 extended tests supported by both protocols. Each target sets its endpoint,
 protocol, and test config explicitly, regardless of the container defaults.
+The browser target runs in a pinned Playwright container, installs its node
+packages there, and uses the account generated when `nictool-legacy` starts.
 
 ## Local development
 

@@ -25,10 +25,10 @@ keys are:
 - `train` — an optional ordered list of upstream PRs for a temporary
   integration branch
 
-No PR train is currently declared. Base new NicTool work on clean
-`origin/master`, or on a fork default branch after it has synchronized from
-upstream. Do not recreate a train unless `mani.yaml` intentionally declares
-one again.
+`mani.yaml` temporarily declares the v2 REST bridge trains for NicTool#365 and
+api#61. Run `./nt.py train` to assemble them for integration testing; do not
+use the resulting `train/*` branches as bases for unrelated work. Remove each
+train after its PR is merged.
 
 ## Tool ownership
 
@@ -242,9 +242,10 @@ missing. The db bakes credentials in at first initialization, so regenerating
 `.env` later orphans the existing `db-data` volume — wipe it (`make clean`)
 and let init run again rather than debugging access-denied errors.
 
-While NicTool/validate#29 is in flight, the api builds with a proposed
-validate source pinned in `docker-compose.yml` and runs the `libs/validate`
-checkout; README's "Proposed validate" section covers the pin and its removal.
+While the REST bridge PRs are in flight, `mani.yaml` declares their trains and
+the api builds with validate 1.0.0 ahead of its own dependency. README's
+"REST bridge integration" section covers the temporary settings and their
+removal.
 
 ## Worktrees
 

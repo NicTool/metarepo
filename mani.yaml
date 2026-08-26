@@ -18,6 +18,7 @@ projects:
     tags: [v2]
     env:
       pin: master
+      train: 365
 
   api:
     path: api
@@ -25,7 +26,8 @@ projects:
     desc: v3 Node.js REST API
     tags: [v3, app]
     env:
-      pin: v3.0.3
+      pin: main
+      train: 61
 
   server:
     path: server
@@ -41,7 +43,7 @@ projects:
     desc: Joi schemas shared across v3
     tags: [v3, lib]
     env:
-      pin: v0.9.2
+      pin: v1.0.0
 
   dns-zone:
     path: libs/dns-zone
