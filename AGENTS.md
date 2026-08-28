@@ -242,10 +242,9 @@ missing. The db bakes credentials in at first initialization, so regenerating
 `.env` later orphans the existing `db-data` volume — wipe it (`make clean`)
 and let init run again rather than debugging access-denied errors.
 
-While the REST bridge PRs are in flight, `mani.yaml` declares their trains and
-the api builds with validate 1.0.0 ahead of its own dependency. README's
-"REST bridge integration" section covers the temporary settings and their
-removal.
+While the REST bridge PRs are in flight, `mani.yaml` declares their trains.
+README's "REST bridge integration" section covers the temporary settings and
+their removal.
 
 ## Worktrees
 

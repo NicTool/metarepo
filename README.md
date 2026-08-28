@@ -117,16 +117,13 @@ make init
 make train
 ```
 
-validate#29 shipped as `@nictool/validate` 1.0.0, but the api still depends on
-`^0.9.1`, so `docker-compose.yml` builds it with `NICTOOL_VALIDATE_SPEC`
-defaulting to `@nictool/validate@1.0.0`. The manifest checkout is mounted over
-the installed copy at runtime; the image install supplies validate's
-dependencies. Once the api depends on `^1.0.0` and the companion PRs are merged
-and released, remove the manifest trains, restore the release pins, and drop
-the spec default here.
+The api depends on `@nictool/validate` `^1.0.0`; `docker-compose.yml` mounts
+the manifest's `libs/validate` checkout over the installed copy so the api runs
+whatever the manifest pins. Once the companion PRs are merged and released,
+remove the manifest trains and restore the release pins.
 
 `api_node_modules` is a named volume seeded from the image on first start, so a
-changed spec only takes effect after `make clean` (or `docker volume rm
+changed dependency only takes effect after `make clean` (or `docker volume rm
 nictool-metarepo_api_node_modules`).
 
 ## Testing
