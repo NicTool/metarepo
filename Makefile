@@ -45,11 +45,13 @@ up-legacy: env check-ports ## Start db + legacy Perl NicTool
 up-all: env check-ports ## Start everything
 	docker compose --env-file docker/.env --profile all up --build -d --wait
 
+# The one-off v2 browser runner lives outside the all profile so up-all
+# never starts it; down and clean still have to cover it.
 down: env ## Stop all services
-	docker compose --env-file docker/.env --profile all down
+	docker compose --env-file docker/.env --profile all --profile test down
 
 clean: env ## Stop all and remove volumes
-	docker compose --env-file docker/.env --profile all down -v
+	docker compose --env-file docker/.env --profile all --profile test down -v
 
 test: test-api test-libs ## Run v3 API + library tests (requires make up)
 
