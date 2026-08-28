@@ -4,7 +4,6 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-VALIDATE_SPEC = "@nictool/validate@1.0.0"
 PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.58.2-noble"
 BRIDGE_TRAINS = {
     "NicTool": ("master", 365),
@@ -30,10 +29,10 @@ class ComposeTests(unittest.TestCase):
 
         self.assertEqual(manifest["projects"]["validate"]["env"], {"pin": "v1.0.0"})
 
-    def test_api_builds_with_the_released_validate_by_default(self):
-        spec = compose()["services"]["api"]["build"]["args"]["NICTOOL_VALIDATE_SPEC"]
+    def test_api_build_takes_no_validate_spec(self):
+        build = compose()["services"]["api"]["build"]
 
-        self.assertEqual(spec, f"${{NICTOOL_VALIDATE_SPEC:-{VALIDATE_SPEC}}}")
+        self.assertNotIn("args", build)
 
     def test_api_runs_the_manifest_validate_checkout(self):
         volumes = compose()["services"]["api"]["volumes"]

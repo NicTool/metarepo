@@ -26,9 +26,6 @@ services:
     build:
       context: ./api
       dockerfile: docker/Dockerfile
-      args:
-        # validate 1.0.0 until the api depends on ^1.0.0
-        NICTOOL_VALIDATE_SPEC: ${NICTOOL_VALIDATE_SPEC:-@nictool/validate@1.0.0}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
