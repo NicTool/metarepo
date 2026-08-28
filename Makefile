@@ -1,6 +1,7 @@
 .PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
 
 V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
+V2_E2E_EXEC = docker compose --env-file docker/.env --profile legacy --profile test run --rm --no-deps -T
 V2_SOAP_ENV = -e NICTOOL_DATA_PROTOCOL=soap -e NICTOOL_SERVER_HOST=localhost -e NICTOOL_SERVER_PORT=8082 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test.cfg
 V2_REST_ENV = -e NICTOOL_DATA_PROTOCOL=rest -e NICTOOL_SERVER_HOST=api -e NICTOOL_SERVER_PORT=3000 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test-rest.cfg
 
@@ -94,8 +95,11 @@ test-v2-e2e-rest: ## Run the v2 browser suite through REST (requires up-legacy)
 	if [ -z "$$user" ] || [ -z "$$password" ] || [ -z "$$test_gid" ]; then \
 		echo "REST browser test settings are missing; recreate nictool-legacy" >&2; exit 1; \
 	fi; \
-	cd NicTool/client/t/e2e && \
-	NICTOOL_TEST_USER="$$user" NICTOOL_TEST_PASSWORD="$$password" NICTOOL_TEST_GID="$$test_gid" npm test
+	$(V2_E2E_EXEC) \
+		-e NICTOOL_TEST_USER="$$user" \
+		-e NICTOOL_TEST_PASSWORD="$$password" \
+		-e NICTOOL_TEST_GID="$$test_gid" \
+		v2-e2e
 
 test-v2-xt: ## Run all NicTool v2 extended tests through SOAP (requires up-legacy)
 	$(MAKE) test-v2-xt-soap

@@ -27,8 +27,8 @@ services:
       context: ./api
       dockerfile: docker/Dockerfile
       args:
-        # proposed validate (NicTool/validate#29) until it ships as 0.9.3
-        NICTOOL_VALIDATE_SPEC: ${NICTOOL_VALIDATE_SPEC:-https://github.com/aberoham/validate/archive/a4d07855a3afe824d7d1d754550cb2d9a75fb145.tar.gz}
+        # validate 1.0.0 until the api depends on ^1.0.0
+        NICTOOL_VALIDATE_SPEC: ${NICTOOL_VALIDATE_SPEC:-@nictool/validate@1.0.0}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
@@ -112,7 +112,24 @@ services:
       retries: 10
       start_period: 30s
 
+  v2-e2e:
+    profiles: [test]
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    depends_on:
+      nictool-legacy:
+        condition: service_healthy
+    init: true
+    ipc: host
+    working_dir: /work
+    volumes:
+      - ./NicTool/client/t/e2e:/work
+      - v2_e2e_node_modules:/work/node_modules
+    environment:
+      NICTOOL_URL: https://nictool-legacy
+    command: ["sh", "-c", "npm ci && npm test"]
+
 volumes:
   db-data:
   api_node_modules:
   server_node_modules:
+  v2_e2e_node_modules:

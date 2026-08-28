@@ -44,6 +44,9 @@ class V2TestTargetTests(unittest.TestCase):
         self.assertIn('NICTOOL_TEST_USER="$user"', output)
         self.assertIn('NICTOOL_TEST_PASSWORD="$password"', output)
         self.assertIn('NICTOOL_TEST_GID="$test_gid"', output)
+        self.assertIn("run --rm --no-deps -T", output)
+        self.assertIn("v2-e2e", output)
+        self.assertNotIn("cd NicTool/client/t/e2e", output)
 
 
 if __name__ == "__main__":
