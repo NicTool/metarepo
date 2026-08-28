@@ -32,10 +32,10 @@ projects:
   server:
     path: server
     url: https://github.com/NicTool/server.git
-    desc: v3 web UI (no releases yet, tracks main)
+    desc: v3 web UI
     tags: [v3, app]
     env:
-      pin: main
+      pin: v0.6.0
 
   validate:
     path: libs/validate
