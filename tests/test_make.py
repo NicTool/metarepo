@@ -51,10 +51,8 @@ class V2TestTargetTests(unittest.TestCase):
 
 class TeardownTargetTests(unittest.TestCase):
     def test_down_and_clean_cover_the_browser_runner_profile(self):
-        for target in ("down", "clean"):
-            output = make_dry_run(target)
-
-            self.assertIn("--profile all --profile test down", output)
+        self.assertIn("--profile all --profile test down\n", make_dry_run("down"))
+        self.assertIn("--profile all --profile test down -v\n", make_dry_run("clean"))
 
     def test_up_all_leaves_the_browser_runner_alone(self):
         output = make_dry_run("up-all")

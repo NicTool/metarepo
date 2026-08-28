@@ -16,7 +16,10 @@ class WorkflowTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
         self.assertIn("make env", workflow)
-        self.assertIn("--profile legacy --profile test config --quiet", workflow)
+        self.assertIn(
+            "docker compose --env-file docker/.env --profile all --profile test config --quiet",
+            workflow,
+        )
 
 
 if __name__ == "__main__":
