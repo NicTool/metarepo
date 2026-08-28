@@ -86,7 +86,39 @@ and base subsequent work on the upstream default branch (`master` for
 `NicTool/NicTool`, `main` for every other current member), or on the equivalent
 fork branch after `./nt.py fork` reports that it synchronized successfully.
 Keep local feature branches until their work is safely upstream; delete them
-only as a deliberate cleanup action.
+only as a deliberate cleanup action, as described below.
+
+## Branches are single-use; main stays linear
+
+PRs land on the default branch as one squash commit, so `main` (or `master`)
+is a straight line of reviewed changes. Work with that, not against it:
+
+- One branch, one PR. Once the PR is squash-merged, the branch is finished.
+  Do not add commits to it for a follow-up: the squash replaced its commits
+  with a new one, so the old branch now conflicts with `main`, and a second
+  PR from it shows the already-merged diff again. metarepo#10 became
+  unmergeable exactly this way.
+- Start every follow-up from a fresh `origin/main` on a new branch, even when
+  it continues the same piece of work.
+- Bring a branch up to date by rebasing onto `origin/main` and pushing with
+  `--force-with-lease`. Never merge `main` into a branch, and never put a
+  merge commit on `main`.
+- After the squash lands, delete the branch. Git cannot see that a squashed
+  branch is merged, so `git branch -d` refuses; prove it yourself, then force
+  it:
+
+  ```sh
+  git fetch origin && git diff --stat origin/main <branch>   # empty = nothing lost
+  git branch -D <branch>
+  git push fork --delete <branch>
+  git fetch --prune fork
+  ```
+
+  A branch whose PR merged upstream is safely upstream; deleting it is the
+  deliberate cleanup the previous section refers to.
+- The same applies in member repositories; `./nt.py sync` never moves a
+  claimed checkout, so a finished branch left checked out keeps the member
+  off its pin until someone deletes it.
 
 ## Never post to GitHub without human review (hard rule)
 
@@ -129,7 +161,9 @@ personal state, and a PR is only opened after the gate.
 4. Draft the upstream PR title and body, then follow the human-review gate
    above before running
    `gh pr create --repo NicTool/<repo> --head <fork-owner>:<branch> --base <default>`.
-5. After an upstream release is published, update the applicable `mani.yaml`
+5. After the PR is squash-merged, delete the branch and start any follow-up
+   from a fresh default branch.
+6. After an upstream release is published, update the applicable `mani.yaml`
    pin in a separate metarepo change. A merged commit on `main` is not a
    release tag.
 
