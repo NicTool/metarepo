@@ -65,6 +65,11 @@ class ComposeTests(unittest.TestCase):
             "service_completed_successfully",
         )
 
+    def test_legacy_profile_enables_the_generated_test_environment(self):
+        legacy = compose()["services"]["nictool-legacy"]
+
+        self.assertEqual(legacy["environment"]["NICTOOL_TEST_ENV"], "1")
+
     def test_browser_runner_stays_out_of_the_all_profile(self):
         self.assertEqual(compose()["services"]["v2-e2e"]["profiles"], ["test"])
 

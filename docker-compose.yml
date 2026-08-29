@@ -149,6 +149,7 @@ services:
       NICTOOL_DATA_PROTOCOL: ${NICTOOL_DATA_PROTOCOL:-rest}
       NICTOOL_SERVER_HOST: ${NICTOOL_SERVER_HOST:-api}
       NICTOOL_SERVER_PORT: ${NICTOOL_SERVER_PORT:-3000}
+      NICTOOL_TEST_ENV: "1"
     healthcheck:
       test: ["CMD", "curl", "-fso", "/dev/null", "http://localhost/index.cgi"]
       interval: 10s

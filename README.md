@@ -185,6 +185,8 @@ extended tests supported by both protocols. Each target sets its endpoint,
 protocol, and test config explicitly, regardless of the container defaults.
 The browser target runs in a pinned Playwright container, installs its node
 packages there, and uses the account generated when `nictool-legacy` starts.
+The legacy profile opts into that account with `NICTOOL_TEST_ENV=1`; NicTool's
+standalone container leaves it disabled unless requested.
 
 ## Local development
 
