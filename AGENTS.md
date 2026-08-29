@@ -248,7 +248,8 @@ the api (`lib/store-access.test.js`) fails on any such import; keep it green.
 
 `hooks/check.py` enforces the mechanical half of the style guide on every
 commit in every clone: comment runs over two lines, a comment repeating five
-words of nearby added text, the word list below, and commit subject shape.
+words of nearby added text, the word list below, a copyright line in a file's
+first ten lines that doesn't name the current year, and commit subject shape.
 `./nt.py sync` points each clone's `core.hooksPath` at `hooks/`, so it runs
 whoever is committing. `./nt.py lint` runs the same checks over every claimed
 branch. `git commit --no-verify` is the deliberate exception and shows in

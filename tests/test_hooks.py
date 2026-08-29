@@ -177,5 +177,32 @@ class HookEndToEndTests(unittest.TestCase):
         self.assertIn("lower-case opening word", proc.stderr)
 
 
+class CopyrightYearTests(unittest.TestCase):
+    def setUp(self):
+        self.year = check.datetime.now(tz=check.timezone.utc).year
+
+    def test_stale_year_fails(self):
+        problems = check.check_diff(diff("sql/x.sql", f"# Copyright 2004-{self.year - 1} Someone", start=1))
+        want = (f"sql/x.sql:1: copyright runs to {self.year - 1}, "
+                f"not {self.year} (a line you add carries today's year)")
+        self.assertEqual(problems, [want])
+
+    def test_current_year_passes(self):
+        self.assertEqual(check.check_diff(diff("sql/x.sql", f"# Copyright 2004-{self.year} Someone", start=1)), [])
+
+    def test_single_current_year_passes(self):
+        self.assertEqual(check.check_diff(diff("sql/x.sql", f"# Copyright {self.year} Someone", start=1)), [])
+
+    def test_no_year_passes(self):
+        self.assertEqual(check.check_diff(diff("sql/x.sql", "# Copyright The Network People, Inc.", start=1)), [])
+
+    def test_prose_files_are_checked_too(self):
+        problems = check.check_diff(diff("README.md", f"Copyright 2004-{self.year - 1} Someone", start=1))
+        self.assertEqual(len(problems), 1)
+
+    def test_a_string_further_down_is_not_a_banner(self):
+        line = f'    banner = "# Copyright 2004-{self.year - 1} Someone"'
+        self.assertEqual(check.check_diff(diff("tests/t.py", line, start=200)), [])
+
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ import argparse
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 # The list in AGENTS.md "Word choice"; tests/test_hooks.py keeps them equal.
@@ -34,6 +35,10 @@ HASH = {".pl", ".pm", ".t", ".PL", ".py", ".sh", ".bash", ".yml", ".yaml",
 HASH_NAMES = {"Makefile", "Dockerfile", ".gitignore", ".dockerignore", ".env"}
 SLASH = {".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx", ".c", ".h", ".go", ".java"}
 DASH = {".sql"}
+
+COPYRIGHT_HEAD = 10
+COPYRIGHT_RE = re.compile(r"\bcopyright\b", re.IGNORECASE)
+YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 
 WORD_RE = re.compile(r"[a-z0-9]+")
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
@@ -130,6 +135,16 @@ def ngrams(run: list[tuple[int, str]]) -> dict[tuple[str, ...], int]:
 
 def check_diff(diff: str) -> list[str]:
     problems = []
+    this_year = datetime.now(tz=timezone.utc).year
+    for path, lines in added_lines(diff).items():
+        for lineno, text in lines:
+            # A banner, not a string that happens to build one further down.
+            if lineno > COPYRIGHT_HEAD or not COPYRIGHT_RE.search(text):
+                continue
+            years = [int(y) for y in YEAR_RE.findall(text)]
+            if years and max(years) < this_year:
+                problems.append(f"{path}:{lineno}: copyright runs to {max(years)}, "
+                                f"not {this_year} (a line you add carries today's year)")
     for path, lines in added_lines(diff).items():
         style = comment_style(path)
         if style is None or not lines:
