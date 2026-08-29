@@ -80,6 +80,9 @@ make up-all      # Everything at once
 The first run without a cache builds the selected docker images, so it may take
 a while.
 
+Setting this up on a linux server instead of a Mac, or upgrading an existing
+v2 database into it? See [docs/linux-server.md](docs/linux-server.md).
+
 Once the containers are healthy, defaults are:
 
 | Service | URL | What you should see |
