@@ -119,8 +119,10 @@ make train
 
 The api depends on `@nictool/validate` `^1.0.0`; `docker-compose.yml` mounts
 the manifest's `libs/validate` checkout over the installed copy so the api runs
-whatever the manifest pins. Once the companion PRs are merged and released,
-remove the manifest trains and restore the release pins.
+whatever the manifest pins. validate#31 is merged but not yet released, so the
+manifest follows validate's `main` until the next release tag replaces it. Once
+the companion PRs are merged and released, remove the manifest trains and
+restore the release pins.
 
 `api_node_modules` is a named volume seeded from the image on first start, so a
 changed dependency only takes effect after `make clean` (or `docker volume rm
