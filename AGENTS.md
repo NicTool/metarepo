@@ -124,6 +124,23 @@ is a straight line of reviewed changes. Work with that, not against it:
   claimed checkout, so a finished branch left checked out keeps the member
   off its pin until someone deletes it.
 
+## One artifact per change
+
+An issue is for work that isn't done yet. Every one of the maintainer's issues
+in `api` is forward-looking — "Write library to manipulate the DB for Zones",
+"Create HTTP routes for Sessions", "Include a Dockerfile". That's a backlog, not
+a defect record. A PR is for work that's finished and brings its own evidence.
+
+So when the fix is already in hand, skip the issue and put the whole story in
+the PR: the measurements, the repro, the reasoning that would have filled the
+issue body. An issue that shows up holding its own fix was born closed, and
+closing it is work for someone else. We filed api#67 that way and it was closed
+the same hour: "Skip creating the issue, put all the content in the PR."
+
+Open an issue only when no PR is coming from us — a defect we can't fix, a
+question, or work someone should pick up later. When an issue already exists,
+link it from the PR (`fixes #NNN`).
+
 ## Never post to GitHub without human review (hard rule)
 
 Nothing agent-authored may appear on GitHub without a human approving the exact
