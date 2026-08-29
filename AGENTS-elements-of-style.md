@@ -33,6 +33,11 @@ But when directing work — naming an artifact and its required end state — dr
 the hedges entirely. "The README table indicates RR support; assure it is up to
 date." No rationale paragraph unless asked.
 
+That covers work you are directing, not a procedure you are describing. An
+instruction you have not run is a claim: run it, hedge it, or delete it. Prose in
+a migration file gets read by someone repairing a database under time pressure,
+and it will be followed exactly.
+
 ## own mistakes fast
 
 "I was wrong, fixed in <commit>." No apology spiral, no post-mortem nobody asked

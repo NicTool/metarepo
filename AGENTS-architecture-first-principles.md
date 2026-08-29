@@ -54,6 +54,30 @@ This outranks elegance:
 - v2 is maintenance-only; features route to v3 and say so ("this is a 3.x
   feature" is a complete answer)
 
+## unenforced references are still references
+
+Most references in the data model have nothing enforcing them. v2 ran for years
+with foreign keys disabled, so `sql/upgrade/05_enable_foreign_keys.sql` restores
+only the ones an existing database can survive; the rest are plain columns that
+happen to hold another table's key — `nt_nameserver.export_type_id`,
+`nt_zone_record.type_id`, both columns of `nt_zone_nameserver`, and
+twenty-seven others. The file stores have no constraints at all: json and toml
+carry the same references with nothing but the reading code to keep them honest.
+
+So a FOREIGN KEY is a mysql implementation detail, not the definition of a
+reference. The reference graph belongs to the domain and holds in every backend.
+Find out what points at a record before changing it; no store will stop you.
+
+Never renumber a key. An id change orphans or repoints every child silently, and
+repointing is the worse half — the record still resolves, to the wrong parent.
+Heal a lookup table by name instead: `INSERT IGNORE` a missing row, `UPDATE ...
+SET name=` a wrong one, the way `NicTool/server/sql/upgrade.pl` always has.
+
+What an id means varies, so check before assuming. Export type ids are arbitrary
+surrogates that nothing reads — v2 dispatches on the joined name, v3 resolves
+name to id on write. `resource_record_type.id` is the opposite: it is the IANA RR
+type number, and `libs/dns-resource-record` depends on the values.
+
 ## optional means optional
 
 An integration must not become an install requirement. Feature-detect the
