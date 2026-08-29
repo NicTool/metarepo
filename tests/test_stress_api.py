@@ -39,6 +39,9 @@ class StressApiScriptTests(unittest.TestCase):
     def test_runs_every_iteration_and_keeps_failed_output(self):
         with tempfile.TemporaryDirectory() as temp:
             tempdir = Path(temp)
+            api_dir = tempdir / "api"
+            api_dir.mkdir()
+            (api_dir / "package.json").write_text("{}\n")
             calls = tempdir / "calls"
             count = tempdir / "count"
             fake_docker = tempdir / "docker"
@@ -74,6 +77,7 @@ class StressApiScriptTests(unittest.TestCase):
                 "PATH": f"{tempdir}:{os.environ['PATH']}",
                 "RUNTIME": "node:24",
                 "N": "4",
+                "STRESS_API_API_DIR": str(api_dir),
                 "STRESS_API_LOG_DIR": str(logs),
             }
 
@@ -97,6 +101,7 @@ class StressApiScriptTests(unittest.TestCase):
             self.assertIn("runtime: node:24", result.stdout)
             self.assertEqual(count.read_text().strip(), "4")
             self.assertIn("--build-arg RUNTIME=node:24", calls.read_text())
+            self.assertIn(str(api_dir), calls.read_text())
 
             failed_logs = list(logs.glob("*/run-002.log"))
             self.assertEqual(len(failed_logs), 1)
