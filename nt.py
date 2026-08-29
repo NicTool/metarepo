@@ -12,6 +12,10 @@ mani owns cloning and cross-repo commands; nt owns what mani can't express:
   update  check upstream for newer release tags, --write rewrites mani.yaml
   train   assemble a PR integration branch from env.train
   fork    create GitHub forks and wire 'fork' remotes (--remove to drop them)
+  lint    run hooks/check.py over every claimed branch
+
+sync also points each clone's core.hooksPath at hooks/, so the style checks
+run on every commit whoever, or whatever, is committing.
 
 Pins live in mani.yaml under each project's env.pin: a release tag means a
 detached checkout at that tag; a branch name means checkout + fast-forward.
@@ -34,6 +38,8 @@ ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "mani.yaml"
 TAG_RE = re.compile(r"v?\d+\.\d+\.\d+$")
 PR_REF = "refs/nt/pr"
+HOOKS = ROOT / "hooks"
+CHECK = HOOKS / "check.py"
 
 
 @dataclass(frozen=True)
@@ -311,6 +317,37 @@ def cmd_sync(projects: list[Project]) -> None:
         list(pool.map(lambda p: git(p.path, "fetch", "--tags", "--prune", "-q", "origin"), projects))
     for p in projects:
         print(f"{p.name:<22} {checkout_pin(p)}")
+    for path in [ROOT, *(p.path for p in projects)]:
+        if note := install_hooks(path):
+            print(f"{path.relative_to(ROOT) if path != ROOT else '.'}: {note}")
+
+
+def install_hooks(path: Path) -> str:
+    """Point a clone's core.hooksPath at hooks/; say so only when it changes."""
+    current = git(path, "config", "--get", "core.hooksPath", check=False).stdout.strip()
+    if current == str(HOOKS):
+        return ""
+    git(path, "config", "core.hooksPath", str(HOOKS))
+    return f"hooks: core.hooksPath -> {HOOKS.relative_to(ROOT)}" + (f" (was {current})" if current else "")
+
+
+def cmd_lint(projects: list[Project]) -> None:
+    """Run the style checks over each claimed branch against its upstream default."""
+    ok = True
+    metarepo = Project(name=".", path=ROOT, url="", pin="main")
+    for p in [metarepo, *projects]:
+        if not p.path.is_dir():
+            continue
+        branch = current_branch(p)
+        base = default_branch(p) or "main"
+        if not branch or branch == base:
+            continue
+        print(f"==> {p.name} {branch} vs origin/{base}")
+        proc = sh([sys.executable, str(CHECK), "--range", f"origin/{base}..HEAD"], cwd=p.path, check=False)
+        sys.stderr.write(proc.stderr)
+        ok &= proc.returncode == 0
+    if not ok:
+        sys.exit(1)
 
 
 def latest_stable_tag(p: Project) -> str | None:
@@ -519,6 +556,7 @@ def main() -> None:
                          "GitHub forks unchanged")
     fk.add_argument("--part", metavar="NAME",
                     help="operate on one manifest part instead of all parts")
+    sub.add_parser("lint", help="style-check every claimed branch against its upstream default")
     args = parser.parse_args()
     projects = load_projects()
     match args.cmd:
@@ -532,6 +570,8 @@ def main() -> None:
             cmd_train(projects, args.project)
         case "fork":
             cmd_fork(projects, args.owner, args.remove, args.part)
+        case "lint":
+            cmd_lint(projects)
 
 
 if __name__ == "__main__":
