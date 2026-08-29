@@ -50,6 +50,22 @@ services:
       retries: 10
       start_period: 15s
 
+  api-stress:
+    profiles: [stress]
+    image: ${STRESS_API_IMAGE:-nictool-api-stress:node-24}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./libs/validate:/app/node_modules/@nictool/validate:ro
+    environment:
+      NODE_ENV: development
+      NICTOOL_DB_HOST: db
+      NICTOOL_DB_USER: ${NICTOOL_DB_USER:-nictool}
+      NICTOOL_DB_USER_PASSWORD: ${NICTOOL_DB_USER_PASSWORD}
+      NICTOOL_DB_NAME: ${NICTOOL_DB_NAME:-nictool}
+    command: ["npm", "test"]
+
   # ── Node.js v3 Web UI ───────────────────────────────────────────
   server:
     profiles: [ui, e2e, all]

@@ -146,6 +146,19 @@ make test-libs      # just the four libraries (no running services needed)
 `make test-libs` spins up ephemeral `node:22` containers for each library.
 The API integration tests require `make up` first.
 
+For an intermittent API failure, repeat the suite under a named runtime:
+
+```sh
+make stress-api RUNTIME=node:24 N=25
+```
+
+The target copies the API checkout into an image, runs every iteration against
+the compose db, prints failed output, and keeps every run log under
+`local/stress-api/`. It finishes with the measured flake rate and exits non-zero
+if any run failed. The current adapter supports node images, including OS
+variants such as `node:24-alpine`; bun, deno, and serverless runners still need
+their own adapters because the API suite invokes `node --test`.
+
 The v2 container has its own Perl test suites running inside the container against the shared DB:
 
 ```sh
@@ -197,6 +210,7 @@ make sync         # fetch all repos, move clean ones to their pins
 make update       # check upstream for newer release tags
 make test         # run v3 API + library tests (requires make up)
 make test-api     # run v3 API tests only
+make stress-api RUNTIME=node:24 N=25  # repeat the API suite and retain each log
 make test-server  # run v3 server tests only (requires make up-ui)
 make test-libs    # run library tests (no running services needed)
 make test-v2       # run all v2 unit and extended tests through SOAP
