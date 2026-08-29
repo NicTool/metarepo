@@ -106,3 +106,37 @@ class MissingPrerequisiteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrainTests(unittest.TestCase):
+    def project(self):
+        return nt.Project(name="NicTool", path=nt.Path("/tmp/nictool"), url="https://github.com/NicTool/NicTool.git", pin="master", train=[365])
+
+    @patch("nt.shutil.which", return_value=None)
+    @patch("nt.sh")
+    def test_pr_state_is_unknown_without_gh(self, sh, _which):
+        self.assertEqual(nt.pr_state(self.project(), 365), "unknown")
+        sh.assert_not_called()
+
+    @patch("nt.pr_state", return_value="unknown")
+    @patch("nt.current_branch", return_value="master")
+    @patch("nt.dirty_files", return_value=0)
+    @patch("nt.git")
+    def test_merge_failure_without_conflicts_shows_git_error(self, git, *_):
+        def fake_git(path, *args, check=True):
+            if args[0] == "merge":
+                return subprocess.CompletedProcess(args, 128, "", "fatal: unable to auto-detect email address")
+            return subprocess.CompletedProcess(args, 0, "", "")
+        git.side_effect = fake_git
+
+        with (
+            patch.object(nt.Path, "is_dir", return_value=True),
+            patch("sys.stdout", io.StringIO()),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            nt.assemble_train(self.project())
+
+        message = str(raised.exception)
+        self.assertIn("git merge failed", message)
+        self.assertIn("auto-detect email address", message)
+        self.assertNotIn("CONFLICT", message)
