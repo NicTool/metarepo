@@ -49,6 +49,9 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(env["DB_PORT"], "3306")
         self.assertIn("api", legacy["depends_on"])
 
+    def test_browser_runner_stays_out_of_the_all_profile(self):
+        self.assertEqual(compose()["services"]["v2-e2e"]["profiles"], ["test"])
+
     def test_browser_tests_run_in_the_pinned_playwright_image(self):
         e2e = compose()["services"]["v2-e2e"]
 

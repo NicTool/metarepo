@@ -105,10 +105,14 @@ is a straight line of reviewed changes. Work with that, not against it:
   merge commit on `main`.
 - After the squash lands, delete the branch. Git cannot see that a squashed
   branch is merged, so `git branch -d` refuses; prove it yourself, then force
-  it:
+  it. Comparing trees against `main` is not a proof, because any later commit
+  on `main` makes the diff non-empty. Ask GitHub instead: the PR must be
+  merged, and both the local tip and the fork's must be the exact head it
+  merged.
 
   ```sh
-  git fetch origin && git diff --stat origin/main <branch>   # empty = nothing lost
+  gh pr view <pr> --repo NicTool/<repo> --json state,headRefOid   # MERGED, and
+  git fetch --prune fork && git rev-parse <branch> fork/<branch>  # both that sha
   git branch -D <branch>
   git push fork --delete <branch>
   git fetch --prune fork
