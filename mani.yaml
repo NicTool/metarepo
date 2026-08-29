@@ -43,7 +43,7 @@ projects:
     desc: Joi schemas shared across v3
     tags: [v3, lib]
     env:
-      pin: v1.0.0
+      pin: main
 
   dns-zone:
     path: libs/dns-zone

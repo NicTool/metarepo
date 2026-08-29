@@ -24,10 +24,10 @@ class ComposeTests(unittest.TestCase):
             self.assertEqual(projects[project]["env"]["pin"], pin)
             self.assertEqual(projects[project]["env"]["train"], pull_request)
 
-    def test_manifest_pins_the_released_validate(self):
+    def test_manifest_follows_validate_main_until_its_next_release(self):
         manifest = yaml.safe_load((ROOT / "mani.yaml").read_text())
 
-        self.assertEqual(manifest["projects"]["validate"]["env"], {"pin": "v1.0.0"})
+        self.assertEqual(manifest["projects"]["validate"]["env"], {"pin": "main"})
 
     def test_api_build_takes_no_validate_spec(self):
         build = compose()["services"]["api"]["build"]
