@@ -1,4 +1,4 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-all test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-all test-api test-api-backends stress-api test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
 
 SHELL := bash
 
@@ -78,6 +78,9 @@ test-api-backends: ## Run API tests against every data store backend (requires m
 		echo "==> api tests, $$backend store"; \
 		( $(call node_suite,docker compose --env-file docker/.env exec -T -e NICTOOL_DATA_STORE=$$backend api sh test/run.sh) ) || exit 1; \
 	done
+
+stress-api: env ## Repeat API tests under a runtime image (RUNTIME=node:24 N=25; requires make up)
+	@RUNTIME="$(or $(RUNTIME),node:24)" N="$(or $(N),25)" ./docker/stress-api.sh
 
 test-server: ## Run server tests (requires make up-ui)
 	docker compose --env-file docker/.env --profile ui exec -T server npm test
