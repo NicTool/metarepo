@@ -62,3 +62,26 @@ class TeardownTargetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSummaryTests(unittest.TestCase):
+    GUARD = "(fail|skipped|cancelled) [1-9]"
+
+    def test_node_suites_fail_on_skipped_or_cancelled_tests(self):
+        for target in ("test-api", "test-api-backends", "test-libs"):
+            with self.subTest(target=target):
+                self.assertIn(self.GUARD, make_dry_run(target))
+
+    def test_pipes_do_not_hide_a_failing_test_run(self):
+        # make 3.81 (macOS) ignores .SHELLFLAGS, so the recipe checks PIPESTATUS itself
+        for target in ("test-api", "test-api-backends", "test-libs"):
+            with self.subTest(target=target):
+                self.assertIn("PIPESTATUS[0]", make_dry_run(target))
+
+    def test_test_all_runs_every_suite_in_order(self):
+        output = make_dry_run("test-all")
+        order = [output.find(m) for m in ("api npm test", "for backend in mysql json toml", "NICTOOL_DATA_PROTOCOL=rest", "NICTOOL_DATA_PROTOCOL=soap")]
+
+        self.assertTrue(all(pos >= 0 for pos in order), output)
+        self.assertEqual(order, sorted(order))
+        self.assertIn("v2-e2e", output)

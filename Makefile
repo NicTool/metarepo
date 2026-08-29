@@ -1,4 +1,17 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-all test-api test-api-backends test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
+
+SHELL := bash
+
+# node's test runner counts skipped and cancelled tests separately from
+# failures and exits 0 for skips; a suite that quietly stops running is not
+# a passing suite. Streams the output, then fails on the runner's own exit
+# code or on any non-zero fail/skipped/cancelled line. (GNU make 3.81 on
+# macOS ignores .SHELLFLAGS, so no pipefail here; PIPESTATUS does the job.)
+define node_suite
+out=$$(mktemp); $(1) 2>&1 | tee $$out; rc=$${PIPESTATUS[0]}; \
+awk '/^(ℹ|\#) (fail|skipped|cancelled) [1-9]/ { bad = 1 } END { exit bad }' $$out || rc=1; \
+rm -f $$out; [ $$rc -eq 0 ]
+endef
 
 V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
 V2_E2E_EXEC = docker compose --env-file docker/.env --profile legacy --profile test run --rm --no-deps -T
@@ -55,13 +68,15 @@ clean: env ## Stop all and remove volumes
 
 test: test-api test-libs ## Run v3 API + library tests (requires make up)
 
+test-all: test test-api-backends test-v2-rest test-v2-xt test-v2-e2e-rest ## Every suite, v3 and v2, in order (requires make up-legacy)
+
 test-api: ## Run API tests (requires make up)
-	docker compose --env-file docker/.env exec -T api npm test
+	@$(call node_suite,docker compose --env-file docker/.env exec -T api npm test)
 
 test-api-backends: ## Run API tests against every data store backend (requires make up)
 	@for backend in mysql json toml; do \
 		echo "==> api tests, $$backend store"; \
-		docker compose --env-file docker/.env exec -T -e NICTOOL_DATA_STORE=$$backend api sh test/run.sh || exit 1; \
+		( $(call node_suite,docker compose --env-file docker/.env exec -T -e NICTOOL_DATA_STORE=$$backend api sh test/run.sh) ) || exit 1; \
 	done
 
 test-server: ## Run server tests (requires make up-ui)
@@ -70,7 +85,7 @@ test-server: ## Run server tests (requires make up-ui)
 test-libs: ## Run library tests (no running services needed)
 	@for lib in validate dns-zone dns-nameserver dns-resource-record; do \
 		echo "==> libs/$$lib"; \
-		docker run --rm -v $$(pwd)/libs/$$lib:/app -w /app node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test"; \
+		( $(call node_suite,docker run --rm -v $$(pwd)/libs/$$lib:/app -w /app node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test") ) || exit 1; \
 	done
 
 test-v2-unit: ## Run NicTool v2 unit tests with SOAP defaults (requires up-legacy)
