@@ -140,3 +140,17 @@ class TrainTests(unittest.TestCase):
         self.assertIn("git merge failed", message)
         self.assertIn("auto-detect email address", message)
         self.assertNotIn("CONFLICT", message)
+
+
+class LintTests(unittest.TestCase):
+    @patch("nt.sys.exit")
+    @patch("nt.sh")
+    @patch("nt.current_branch", return_value="work")
+    @patch("nt.default_branch", return_value="main")
+    def test_lint_skips_missing_clones(self, _default, _branch, sh, _exit):
+        sh.return_value = subprocess.CompletedProcess([], 0, "", "")
+        missing = nt.Project(name="ghost", path=nt.ROOT / "does-not-exist", url="", pin="main")
+        with patch.object(sys, "stdout", io.StringIO()):
+            nt.cmd_lint([missing])
+        for args, kwargs in sh.call_args_list:
+            self.assertNotEqual(kwargs.get("cwd"), missing.path)

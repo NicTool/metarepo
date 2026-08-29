@@ -234,6 +234,12 @@ git -C api push -u fork my-change
 gh pr create --repo NicTool/api --head <owner>:my-change --base main
 ```
 
+Every clone commits through `hooks/` (`./nt.py sync` sets `core.hooksPath`):
+comments over two lines, a comment repeating nearby text, the words
+`AGENTS.md` bans, and a capitalised or over-long subject are refused before
+they reach a PR. `./nt.py lint` runs the same checks over each claimed branch;
+`git commit --no-verify` is the escape hatch.
+
 Done with forks? `./nt.py fork --remove` drops all the remotes, while
 `./nt.py fork --remove --part dns-resource-record` drops only that part's
 remote. Your forks on GitHub stay put.
@@ -249,7 +255,8 @@ metarepo/
   docker-compose.yml      # all services, all profiles
   Makefile                # task runner
   mani.yaml               # manifest: repos and pins
-  nt.py                   # workspace tool: sync / status / update / fork
+  nt.py                   # workspace tool: sync / status / update / fork / lint
+  hooks/                  # style checks every clone commits through
   api/                    # [repo] v3 REST API
   server/                 # [repo] v3 Web UI
   NicTool/                # [repo] Legacy Perl v2

@@ -35,7 +35,7 @@ train after its PR is merged.
 | Tool | Owns |
 |---|---|
 | `mani` | Cloning, `.gitignore` upkeep, and commands across member repositories |
-| `nt.py` | Pins, drift reporting, release updates, optional PR trains, and fork remotes |
+| `nt.py` | Pins, drift reporting, release updates, optional PR trains, fork remotes, and the git hooks |
 | Plain `git` inside a member repository | Branches, commits, and pushes |
 | `docker compose` / `make` | Building, running, and testing member applications |
 | `uv` / `uvx` | Running and validating the workspace's Python tooling |
@@ -226,6 +226,17 @@ aspirational — see "brokers over backends" in
 When reviewing, treat a direct `mysql2` import outside a `store/` module as a
 blocking finding, the same category as a bypassed permission check. A test in
 the api (`lib/store-access.test.js`) fails on any such import; keep it green.
+
+## Style checks run in git, not in the agent
+
+`hooks/check.py` enforces the mechanical half of the style guide on every
+commit in every clone: comment runs over two lines, a comment repeating five
+words of nearby added text, the word list below, and commit subject shape.
+`./nt.py sync` points each clone's `core.hooksPath` at `hooks/`, so it runs
+whoever is committing. `./nt.py lint` runs the same checks over every claimed
+branch. `git commit --no-verify` is the deliberate exception and shows in
+review. Meaning is still yours to judge: a comment that paraphrases the code
+passes the hook and fails the guide.
 
 ## Word choice
 
