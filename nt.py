@@ -447,7 +447,9 @@ def cmd_fork(
 
 
 def pr_state(p: Project, number: int) -> str:
-    """Ask GitHub whether a PR is open/merged/closed; 'unknown' if gh fails."""
+    """Ask GitHub whether a PR is open/merged/closed; 'unknown' without gh or if it fails."""
+    if not shutil.which("gh"):
+        return "unknown"
     out = sh(["gh", "api", f"repos/{p.upstream_slug}/pulls/{number}",
               "--jq", 'if .merged then "merged" else .state end'], check=False)
     return out.stdout.strip() or "unknown"
@@ -458,7 +460,6 @@ def cmd_train(projects: list[Project], name: str | None) -> None:
     if not trains:
         sys.exit(f"error: no project {'named ' + name if name else ''} with env.train in mani.yaml")
     require_command("git")
-    require_command("gh")
     for p in trains:
         assemble_train(p)
 
@@ -487,9 +488,14 @@ def assemble_train(p: Project) -> None:
         if merge.returncode != 0:
             conflicts = git(p.path, "diff", "--name-only", "--diff-filter=U").stdout.strip()
             git(p.path, "merge", "--abort", check=False)
-            sys.exit(f"  PR #{n}: CONFLICT with the train so far, in:\n"
-                     f"{conflicts}\n"
-                     f"{p.name} left on {branch}; resolve by hand or reorder the train")
+            if conflicts:
+                sys.exit(f"  PR #{n}: CONFLICT with the train so far, in:\n"
+                         f"{conflicts}\n"
+                         f"{p.name} left on {branch}; resolve by hand or reorder the train")
+            # no conflicted files: git refused for another reason (no identity, say)
+            sys.exit(f"  PR #{n}: git merge failed:\n"
+                     f"{merge.stderr.strip() or merge.stdout.strip()}\n"
+                     f"{p.name} left on {branch}")
         print(f"  PR #{n}: merged ({state})")
     print(f"{p.name}: train assembled on {branch}; branch from here for new work")
 
