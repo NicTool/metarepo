@@ -93,6 +93,10 @@ Once the containers are healthy, defaults are:
 | v2 Legacy (HTTPS) | https://localhost:8443 | Same, with self-signed cert |
 | DB | `localhost:3307` | Connect with any MySQL client |
 
+On a fresh db, the legacy profile creates `root@NicTool` with
+`ROOT_USER_EMAIL` and `ROOT_USER_PASSWORD` from `docker/.env`. It leaves an
+existing root user unchanged.
+
 ## Docker Compose profiles
 
 | Profile | Services started |
