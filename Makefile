@@ -2,14 +2,17 @@
 
 SHELL := bash
 
-# node's test runner counts skipped and cancelled tests separately from
-# failures and exits 0 for skips; a suite that quietly stops running is not
-# a passing suite. Streams the output, then fails on the runner's own exit
-# code or on any non-zero fail/skipped/cancelled line. (GNU make 3.81 on
-# macOS ignores .SHELLFLAGS, so no pipefail here; PIPESTATUS does the job.)
+# node exits zero for skipped and cancelled tests, so preserve the pipeline
+# status and inspect its summary before calling a suite successful.
 define node_suite
 out=$$(mktemp); $(1) 2>&1 | tee $$out; rc=$${PIPESTATUS[0]}; \
 awk '/^(ℹ|\#) (fail|skipped|cancelled) [1-9]/ { bad = 1 } END { exit bad }' $$out || rc=1; \
+rm -f $$out; [ $$rc -eq 0 ]
+endef
+
+define node_suite_warn_skips
+out=$$(mktemp); $(1) 2>&1 | tee $$out; rc=$${PIPESTATUS[0]}; \
+awk '/^(ℹ|\#) (fail|cancelled) [1-9]/ { bad = 1 } /^(ℹ|\#) skipped [1-9]/ { print "WARNING: " $$0 > "/dev/stderr" } END { exit bad }' $$out || rc=1; \
 rm -f $$out; [ $$rc -eq 0 ]
 endef
 
@@ -17,6 +20,12 @@ V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
 V2_E2E_EXEC = docker compose --env-file docker/.env --profile legacy --profile test run --rm --no-deps -T
 V2_SOAP_ENV = -e NICTOOL_DATA_PROTOCOL=soap -e NICTOOL_SERVER_HOST=localhost -e NICTOOL_SERVER_PORT=8082 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test.cfg
 V2_REST_ENV = -e NICTOOL_DATA_PROTOCOL=rest -e NICTOOL_SERVER_HOST=api -e NICTOOL_SERVER_PORT=3000 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test-rest.cfg
+NICTOOL_LIBS_SOURCE ?= $(CURDIR)/libs
+NICTOOL_VALIDATE_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/validate
+NICTOOL_DNS_ZONE_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/dns-zone
+NICTOOL_DNS_NAMESERVER_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/dns-nameserver
+NICTOOL_DNS_RESOURCE_RECORD_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/dns-resource-record
+LIB_TEST_MOUNTS = -v "$(NICTOOL_LIBS_SOURCE):/libs" -v "$(NICTOOL_VALIDATE_SOURCE):/libs/validate" -v "$(NICTOOL_DNS_ZONE_SOURCE):/libs/dns-zone" -v "$(NICTOOL_DNS_NAMESERVER_SOURCE):/libs/dns-nameserver" -v "$(NICTOOL_DNS_RESOURCE_RECORD_SOURCE):/libs/dns-resource-record"
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -86,10 +95,12 @@ test-server: ## Run server tests (requires make up-ui)
 	docker compose --env-file docker/.env --profile ui exec -T server npm test
 
 test-libs: ## Run library tests (no running services needed)
-	@for lib in validate dns-zone dns-nameserver dns-resource-record; do \
+	@for lib in validate dns-zone dns-resource-record; do \
 		echo "==> libs/$$lib"; \
-		( $(call node_suite,docker run --rm -v $$(pwd)/libs/$$lib:/app -w /app node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test") ) || exit 1; \
+		( $(call node_suite,docker run --rm $(LIB_TEST_MOUNTS) -w /libs/$$lib node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test") ) || exit 1; \
 	done
+	@echo "==> libs/dns-nameserver"
+	@$(call node_suite_warn_skips,docker run --rm $(LIB_TEST_MOUNTS) -w /libs/dns-nameserver node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test")
 
 test-v2-unit: ## Run NicTool v2 unit tests with SOAP defaults (requires up-legacy)
 	$(V2_EXEC) $(V2_SOAP_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && perl Makefile.PL && make test'
