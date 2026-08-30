@@ -76,6 +76,22 @@ class ComposeTests(unittest.TestCase):
         self.assertIn("v2_e2e_node_modules:/work/node_modules", e2e["volumes"])
         self.assertEqual(e2e["command"], ["sh", "-c", "npm ci && npm test"])
 
+    def test_v3_ui_uses_the_remote_api_and_persists_its_config(self):
+        server = compose()["services"]["server"]
+        env = server["environment"]
+
+        self.assertEqual(env["NICTOOL_API_HOST"], "api")
+        self.assertEqual(env["NICTOOL_API_PORT"], 3000)
+        self.assertEqual(env["NICTOOL_API_SCHEME"], "http")
+        self.assertEqual(env["NICTOOL_HTTP_PORT"], "${SERVER_CONTAINER_PORT:-8080}")
+        self.assertIn("server-data:/data", server["volumes"])
+        self.assertIn("/nt/service", server["healthcheck"]["test"][-1])
+
+    def test_v3_ui_tests_use_the_compose_database(self):
+        dsn = compose()["services"]["server"]["environment"]["NICTOOL_TEST_DSN"]
+
+        self.assertIn("@db:3306/", dsn)
+
 
 if __name__ == "__main__":
     unittest.main()

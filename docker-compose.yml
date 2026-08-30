@@ -104,15 +104,21 @@ services:
     volumes:
       - ./server:/app
       - server_node_modules:/app/node_modules
+      - server-data:/data
     environment:
       NICTOOL_TLS: ${NICTOOL_TLS:-false}
-      NICTOOL_DB_HOST: db
-      NICTOOL_DB_USER: ${NICTOOL_DB_USER:-nictool}
-      NICTOOL_DB_USER_PASSWORD: ${NICTOOL_DB_USER_PASSWORD}
-      NICTOOL_DB_NAME: ${NICTOOL_DB_NAME:-nictool}
       NICTOOL_API_HOST: api
       NICTOOL_API_PORT: 3000
+      NICTOOL_API_SCHEME: http
       NICTOOL_BIND_HOST: "0.0.0.0"
+      NICTOOL_HTTP_PORT: ${SERVER_CONTAINER_PORT:-8080}
+      NICTOOL_TEST_DSN: mysql://${NICTOOL_DB_USER:-nictool}:${NICTOOL_DB_USER_PASSWORD}@db:3306/${NICTOOL_DB_NAME:-nictool}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:${SERVER_CONTAINER_PORT:-8080}/nt/service').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   # ── Legacy Perl NicTool v2 ──────────────────────────────────────
   nictool-legacy:
@@ -169,5 +175,6 @@ services:
 volumes:
   db-data:
   api_node_modules:
+  server-data:
   server_node_modules:
   v2_e2e_node_modules:
