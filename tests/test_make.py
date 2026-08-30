@@ -78,6 +78,22 @@ class TestSummaryTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIn("PIPESTATUS[0]", make_dry_run(target))
 
+    def test_nameserver_suite_warns_on_optional_integration_skips(self):
+        output = make_dry_run("test-libs")
+
+        self.assertIn("node_suite_warn_skips", Path(ROOT, "Makefile").read_text())
+        self.assertIn('print "WARNING: "', Path(ROOT, "Makefile").read_text())
+        self.assertIn("-w /libs/dns-nameserver", output)
+
+    def test_library_suite_mounts_the_full_member_tree(self):
+        output = make_dry_run("test-libs")
+
+        self.assertIn("NICTOOL_LIBS_SOURCE", Path(ROOT, "Makefile").read_text())
+        self.assertIn(":/libs", output)
+        for lib in ("validate", "dns-zone", "dns-nameserver", "dns-resource-record"):
+            self.assertIn(f":/libs/{lib}", output)
+        self.assertIn("-w /libs/$lib", output)
+
     def test_test_all_runs_every_suite_in_order(self):
         output = make_dry_run("test-all")
         order = [output.find(m) for m in ("api npm test", "for backend in mysql json toml", "NICTOOL_DATA_PROTOCOL=rest", "NICTOOL_DATA_PROTOCOL=soap")]

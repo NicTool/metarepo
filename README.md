@@ -144,6 +144,9 @@ make test-libs      # just the four libraries (no running services needed)
 
 `make test-api` and `make test-server` exec into the running containers.
 `make test-libs` spins up ephemeral `node:22` containers for each library.
+The validate, dns-zone, and dns-resource-record suites fail on skips. The
+dns-nameserver suite prints a warning for integration checks that need a db,
+Redis, nameserver binaries, or outside DNS, while failures still fail the target.
 The API integration tests require `make up` first.
 
 For an intermittent API failure, repeat the suite under a named runtime:
