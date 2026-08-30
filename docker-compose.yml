@@ -66,6 +66,29 @@ services:
       NICTOOL_DB_NAME: ${NICTOOL_DB_NAME:-nictool}
     command: ["npm", "test"]
 
+  root-user-init:
+    profiles: [legacy, all]
+    image: node:22-trixie-slim
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - ./api:/app
+      - api_node_modules:/app/node_modules
+      - ./libs/validate:/app/node_modules/@nictool/validate
+      - ./docker/seed-root-user.mjs:/init/seed-root-user.mjs:ro
+    env_file: docker/.env
+    environment:
+      NICTOOL_DATA_STORE: mysql
+      NICTOOL_DB_HOST: db
+      NICTOOL_DB_USER: ${NICTOOL_DB_USER:-nictool}
+      NICTOOL_DB_USER_PASSWORD: ${NICTOOL_DB_USER_PASSWORD}
+      NICTOOL_DB_NAME: ${NICTOOL_DB_NAME:-nictool}
+    command: ["node", "/init/seed-root-user.mjs"]
+
   # ── Node.js v3 Web UI ───────────────────────────────────────────
   server:
     profiles: [ui, e2e, all]
@@ -105,6 +128,8 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+      root-user-init:
+        condition: service_completed_successfully
     volumes:
       - ./NicTool/server:/usr/local/nictool/server
       - ./NicTool/client:/usr/local/nictool/client

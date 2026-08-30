@@ -49,6 +49,22 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(env["DB_PORT"], "3306")
         self.assertIn("api", legacy["depends_on"])
 
+    def test_legacy_waits_for_the_root_user_seed(self):
+        services = compose()["services"]
+        seed = services["root-user-init"]
+
+        self.assertEqual(seed["profiles"], ["legacy", "all"])
+        self.assertEqual(seed["depends_on"]["db"]["condition"], "service_healthy")
+        self.assertEqual(seed["depends_on"]["api"]["condition"], "service_healthy")
+        self.assertEqual(seed["image"], "node:22-trixie-slim")
+        self.assertEqual(seed["working_dir"], "/app")
+        self.assertIn("./docker/seed-root-user.mjs:/init/seed-root-user.mjs:ro", seed["volumes"])
+        self.assertEqual(seed["command"], ["node", "/init/seed-root-user.mjs"])
+        self.assertEqual(
+            services["nictool-legacy"]["depends_on"]["root-user-init"]["condition"],
+            "service_completed_successfully",
+        )
+
     def test_browser_runner_stays_out_of_the_all_profile(self):
         self.assertEqual(compose()["services"]["v2-e2e"]["profiles"], ["test"])
 
