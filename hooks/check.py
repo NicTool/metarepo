@@ -64,6 +64,23 @@ SIGNOFF_RE = re.compile(
 
 # Matt's own prose has no clause-joining semicolon: 937 commit-message lines and
 # both corpus files yield only ";-)" and pasted SQL. Winks stay legal.
+# Work pushed out of the change, or narration about the write-up instead of the
+# work. Either do it or say nothing.
+DEFERRAL_RE = re.compile(
+    r"\b(is|are|remains?|stays?) (a )?(separate|its own|another) (decision|question|concern|change|pr|matter)\b"
+    r"|\b(left|leave|leaving) (as|for|to) (a |an )?(future|later|follow-?up|separate|another)\b"
+    r"|\b(out of scope|beyond the scope|future work|for now|a follow-?up)\b"
+    r"|\bworth (noting|mentioning|saying)\b|\bit is worth\b",
+    re.IGNORECASE,
+)
+
+# Telling the reader what they already know.
+OBVIOUS_RE = re.compile(
+    r"\b(obviously|clearly|of course|as (you|we) (know|can see)|needless to say)\b"
+    r"|\bnote that\b|\bit (is|should be) (worth |)(noted|clear|obvious)\b",
+    re.IGNORECASE,
+)
+
 SEMICOLON_RE = re.compile(r";(?![-^]?\))")
 
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
@@ -274,6 +291,10 @@ def check_prose(text: str) -> tuple[list[str], list[str]]:
             problems.append(f"line {lineno}: '{m.group(1)}'; say it plainly")
         if SEMICOLON_RE.search(line):
             problems.append(f"line {lineno}: semicolon; use a full stop")
+        if m := DEFERRAL_RE.search(line):
+            problems.append(f"line {lineno}: '{m.group(0)}'; do the work or say nothing")
+        if m := OBVIOUS_RE.search(line):
+            problems.append(f"line {lineno}: '{m.group(0)}'; the reader already knows")
         if (m := BULLET_RE.match(line)) and len(m.group(2).split()) > BULLET_WORDS_AIM:
             notes.append(f"line {lineno}: bullet runs {len(m.group(2).split())} words; never bullet-point prose")
         if EM_DASH_RE.search(line):

@@ -249,6 +249,18 @@ class ProseTests(unittest.TestCase):
     def test_rhetorical_closer_is_a_note(self):
         self.assertTrue(any("rhetorical" in n for n in self.notes("We fixed it.\n\nWhy not?")))
 
+    def test_deferral_fails(self):
+        self.assertEqual(len(self.problems("A grammar for owner names is a separate decision.")), 1)
+        self.assertEqual(len(self.problems("URI quoting is left as future work.")), 1)
+        self.assertEqual(len(self.problems("Out of scope for this PR.")), 1)
+
+    def test_captain_obvious_fails(self):
+        self.assertEqual(len(self.problems("Obviously the api is the only consumer.")), 1)
+        self.assertEqual(len(self.problems("Note that the store allocates the id.")), 1)
+
+    def test_a_plain_statement_of_fact_passes(self):
+        self.assertEqual(self.problems("The api is the only consumer of these schemas."), [])
+
     def test_clean_body_passes(self):
         text = "The store allocated the id. The api is the only consumer.\n\n```\na; b\n```\n"
         self.assertEqual(check.check_prose(text), ([], []))

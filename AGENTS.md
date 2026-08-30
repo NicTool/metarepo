@@ -264,7 +264,10 @@ python3 hooks/check.py --prose draft.md
 ```
 
 It fails on figurative filler, a semicolon, a sign-off or generated-by trailer,
-the word list, and any sentence over thirty words. Softer habits are notes
+the word list, and any sentence over thirty words. It also fails on work pushed
+out of the change ("a separate decision", "left as future work") and on telling
+the reader what they already know ("obviously", "note that"). Do the work, or
+say nothing. Softer habits are notes
 rather than failures:
 
 - a sentence over twenty-five words, or more than three commas in one
