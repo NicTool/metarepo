@@ -204,5 +204,55 @@ class CopyrightYearTests(unittest.TestCase):
         line = f'    banner = "# Copyright 2004-{self.year - 1} Someone"'
         self.assertEqual(check.check_diff(diff("tests/t.py", line, start=200)), [])
 
+class ProseTests(unittest.TestCase):
+    def problems(self, text: str) -> list[str]:
+        return check.check_prose(text)[0]
+
+    def notes(self, text: str) -> list[str]:
+        return check.check_prose(text)[1]
+
+    def test_figurative_word_fails(self):
+        self.assertEqual(len(self.problems("One wart, kept on purpose.")), 1)
+
+    def test_every_hit_on_a_line_is_reported(self):
+        self.assertEqual(len(self.problems("The wart quietly stayed.")), 2)
+
+    def test_semicolon_fails(self):
+        self.assertEqual(len(self.problems("It parsed; nobody noticed.")), 1)
+
+    def test_wink_is_not_a_semicolon(self):
+        self.assertEqual(self.problems("Not a character, do you? ;-)"), [])
+        self.assertEqual(self.problems("Fair enough ;)"), [])
+
+    def test_generated_by_trailer_fails(self):
+        self.assertEqual(len(self.problems("Body.\n\nCo-Authored-By: Claude Fable 5")), 1)
+
+    def test_run_on_sentence_fails(self):
+        self.assertEqual(len(self.problems("word " * 31)), 1)
+
+    def test_code_fence_is_exempt(self):
+        text = "```\nDROP TABLE x; SELECT 1;\n```\n"
+        self.assertEqual(self.problems(text), [])
+
+    def test_inline_code_is_exempt(self):
+        self.assertEqual(self.problems("Run `a; b` to start."), [])
+
+    def test_hedges_are_never_flagged(self):
+        text = "My best guess is that it may have failed. I think it might be the store."
+        self.assertEqual(check.check_prose(text), ([], []))
+
+    def test_trailing_clause_is_a_note_not_a_failure(self):
+        problems, notes = check.check_prose("It mounts the sibling, which is why it runs.")
+        self.assertEqual(problems, [])
+        self.assertEqual(len(notes), 1)
+
+    def test_rhetorical_closer_is_a_note(self):
+        self.assertTrue(any("rhetorical" in n for n in self.notes("We fixed it.\n\nWhy not?")))
+
+    def test_clean_body_passes(self):
+        text = "The store allocated the id. The api is the only consumer.\n\n```\na; b\n```\n"
+        self.assertEqual(check.check_prose(text), ([], []))
+
+
 if __name__ == "__main__":
     unittest.main()

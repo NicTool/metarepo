@@ -256,6 +256,25 @@ branch. `git commit --no-verify` is the deliberate exception and shows in
 review. Meaning is still yours to judge: a comment that paraphrases the code
 passes the hook and fails the guide.
 
+Git never sees a PR or issue body, so run those through the same script before
+you post one:
+
+```sh
+python3 hooks/check.py --prose draft.md
+```
+
+It fails on figurative filler, a semicolon, a sign-off or generated-by trailer,
+the word list, and any sentence over thirty words. Softer habits are notes
+rather than failures:
+
+- a sentence over twenty-five words, or more than three commas in one
+- a trailing "which" or "and the" clause where a full stop belongs
+- an em-dash, bulleted prose, a closing rhetorical question
+- rotating synonyms for one action, such as check and verify and validate
+
+Hedges and modals are never flagged. Confidence is content, and a linter that
+squeezed hedges out would rewrite claims.
+
 ## Word choice
 
 Write like the maintainer, not like an LLM. Never use these tell-tale words in

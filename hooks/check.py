@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Mechanical checks from AGENTS-elements-of-style.md on a diff and a commit
-message: comment length, a comment repeating nearby text, the AGENTS.md word
-list, and commit subject shape. Runs as the pre-commit and commit-msg hooks
+"""Mechanical checks from AGENTS-elements-of-style.md on a diff, a commit
+message, or a block of prose: comment length, a comment repeating nearby text,
+the AGENTS.md word list, commit subject shape, and the prose rules --prose
+applies to PR and issue bodies. Runs as the pre-commit and commit-msg hooks
 (./nt.py sync points core.hooksPath here) and under ./nt.py lint.
 Standard library only, so it runs wherever git does.
+
+Confidence is content: hedges and modals (may, might, could, "my best guess")
+are never flagged. A linter that squeezed those out would rewrite claims.
 """
 
 import argparse
@@ -39,6 +43,53 @@ DASH = {".sql"}
 COPYRIGHT_HEAD = 10
 COPYRIGHT_RE = re.compile(r"\bcopyright\b", re.IGNORECASE)
 YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+
+# Figurative register. The guide wants vivid verbs for deletions ("ripped out",
+# "exorcise"), so this stays narrow: cute stand-ins for a plain statement.
+FIGURATIVE = (
+    "wart", "slop", "footgun", "magic", "under the hood", "out of the box",
+    "heavy lifting", "bake in", "baked in", "on the floor", "in hand",
+    "secret sauce", "low-hanging fruit", "rabbit hole", "north star",
+    "table stakes", "sprinkle", "shiny", "elegant", "beautiful", "neat",
+    "hiding", "quietly", "sat behind", "the whole story", "the real story",
+)
+FIGURATIVE_RE = re.compile(r"(?<![\w-])(" + "|".join(map(re.escape, FIGURATIVE)) + r")(?![\w-])", re.IGNORECASE)
+
+# Sign-offs and generated-by trailers. The guide: "just stop writing", and
+# agents must never sign anyone's name to anything.
+SIGNOFF_RE = re.compile(
+    r"(generated with \[?claude|co-authored-by:\s*claude|\U0001F916|^-- $|^~[A-Z][a-z]+$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Matt's own prose has no clause-joining semicolon: 937 commit-message lines and
+# both corpus files yield only ";-)" and pasted SQL. Winks stay legal.
+SEMICOLON_RE = re.compile(r";(?![-^]?\))")
+
+SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+SENTENCE_MAX = 30
+SENTENCE_AIM = 25
+COMMAS_AIM = 3
+TRAILING_CLAUSE_RE = re.compile(r",\s+(which|and that|and the|so the|which is why)\b", re.IGNORECASE)
+EM_DASH_RE = re.compile(r"\u2014")
+BULLET_RE = re.compile(r"^\s*([-*+]|\d+\.)\s+(.*)$")
+BULLET_WORDS_AIM = 25
+
+# One word, one meaning. Rotating synonyms for one action reads as variety and
+# costs the reader a re-parse.
+SYNONYM_GROUPS = (
+    ("check", "verify", "confirm", "validate"),
+    ("delete", "remove", "erase"),
+    ("start", "launch", "begin", "initiate"),
+    ("stop", "halt", "terminate"),
+    ("show", "display"),
+    ("fix", "repair", "correct"),
+    ("get", "retrieve", "fetch", "obtain"),
+    ("change", "modify", "alter"),
+)
+
+CODE_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+INLINE_CODE_RE = re.compile(r"`[^`]*`")
 
 WORD_RE = re.compile(r"[a-z0-9]+")
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
@@ -196,6 +247,64 @@ def check_message(message: str) -> tuple[list[str], list[str]]:
     return problems, notes
 
 
+def prose_lines(text: str):
+    """Yield (lineno, text) for prose only: fenced blocks and inline code drop out."""
+    in_fence = False
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if CODE_FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        yield lineno, INLINE_CODE_RE.sub("", line)
+
+
+def check_prose(text: str) -> tuple[list[str], list[str]]:
+    """Return (problems, notes) for a PR body, issue body, or any prose block."""
+    problems, notes = [], []
+    seen_synonym = {}
+
+    if m := SIGNOFF_RE.search(text):
+        problems.append(f"sign-off or generated-by trailer: '{m.group(0).strip()}'; just stop writing")
+
+    for lineno, line in prose_lines(text):
+        for m in BANNED_RE.finditer(line):
+            problems.append(f"line {lineno}: '{m.group(1)}' (AGENTS.md word choice)")
+        for m in FIGURATIVE_RE.finditer(line):
+            problems.append(f"line {lineno}: '{m.group(1)}'; say it plainly")
+        if SEMICOLON_RE.search(line):
+            problems.append(f"line {lineno}: semicolon; use a full stop")
+        if (m := BULLET_RE.match(line)) and len(m.group(2).split()) > BULLET_WORDS_AIM:
+            notes.append(f"line {lineno}: bullet runs {len(m.group(2).split())} words; never bullet-point prose")
+        if EM_DASH_RE.search(line):
+            notes.append(f"line {lineno}: em-dash; prefer comma, parenthesis, or full stop")
+        for sentence in SENTENCE_SPLIT.split(line):
+            words = sentence.split()
+            if len(words) > SENTENCE_MAX:
+                problems.append(f"line {lineno}: sentence runs {len(words)} words; split it")
+            elif len(words) > SENTENCE_AIM:
+                notes.append(f"line {lineno}: sentence runs {len(words)} words; aim under {SENTENCE_AIM}")
+            if sentence.count(",") > COMMAS_AIM:
+                notes.append(f"line {lineno}: {sentence.count(',')} commas in one sentence; split it")
+            if m := TRAILING_CLAUSE_RE.search(sentence):
+                notes.append(f"line {lineno}: trailing '{m.group(0).strip()}' clause; start a new sentence")
+        lowered = line.lower()
+        for index, group in enumerate(SYNONYM_GROUPS):
+            for base in group:
+                if re.search(r"\b" + base + r"(?:s|es|ed|d|ing)?\b", lowered):
+                    first = seen_synonym.setdefault(index, (base, lineno))
+                    if first[0] != base:
+                        notes.append(
+                            f"line {lineno}: '{base}' after '{first[0]}' on line {first[1]}; one word, one meaning"
+                        )
+                    break
+
+    body = [ln for ln in text.strip().splitlines() if ln.strip()]
+    if body and body[-1].rstrip().endswith("?"):
+        notes.append("closes on a rhetorical question; state the next step plainly, or stop")
+    return problems, notes
+
+
 def git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
 
@@ -214,10 +323,18 @@ def main() -> int:
     mode.add_argument("--staged", action="store_true", help="check the index (pre-commit)")
     mode.add_argument("--message", metavar="FILE", help="check a commit message file (commit-msg)")
     mode.add_argument("--range", metavar="BASE..HEAD", help="check every commit in a range")
+    mode.add_argument("--prose", metavar="FILE", help="check a PR or issue body ('-' for stdin)")
     args = parser.parse_args()
 
     if args.staged:
         return 0 if report(check_diff(git("diff", "--cached", "-U0", "--no-color")), [], "staged") else 1
+    if args.prose:
+        if args.prose == "-":
+            problems, notes = check_prose(sys.stdin.read())
+        else:
+            with open(args.prose, encoding="utf-8", errors="replace") as fh:
+                problems, notes = check_prose(fh.read())
+        return 0 if report(problems, notes, args.prose) else 1
     if args.message:
         with open(args.message, encoding="utf-8", errors="replace") as fh:
             problems, notes = check_message(fh.read())
