@@ -18,6 +18,10 @@ question, delete the opening and re-read.
 Explanations belong in commit and PR notes, not in files. When a file genuinely
 needs context, one sentence plus a link to the PR or issue is enough.
 
+For an agent-authored PR body, write the draft, cut 40% of its words without
+losing meaning, then repeat. State each fact once. Drop process narration and
+anything the reviewer doesn't need; human time and attention are finite.
+
 ## verdict first
 
 State the conclusion in the first clause, then justify. Never build up to it.
@@ -89,17 +93,18 @@ Usually no body — the subject carries the change. Vivid verbs for deletions ar
 a feature: "ripped out", "exorcise". Release commits are literally
 `Release vX.Y.Z`.
 
-One branch per change. Small batches — review is serial human time, and a big
-pile 'o changes takes a bigger while. Whitespace-only changes go in their own
-noop PR. Link the issue (`fixes #NNN`). Rebase and force-push freely; PRs are
-not immutable.
+One branch per change. Make each PR small and focused. Give it a clear,
+informative title and a succinct account of what changed and why. Review is
+serial human time, and a big pile 'o changes takes a bigger while.
+Whitespace-only changes go in their own noop PR. Link the issue (`fixes
+#NNN`). Rebase and force-push freely; PRs are not immutable.
 
 ## never do these
 
 | anti-pattern | instead |
 |---|---|
 | wall-of-text explanation in a file | one line + link to PR/issue |
-| narrating the diff in the PR body | capture the *why*; the diff shows the what |
+| line-by-line narration in the PR body | concise account of what changed and why |
 | restating the code in a comment | better name, or delete the comment |
 | "trust me" as an argument | paste evidence, or add the workflow_dispatch trigger |
 | 180 granular issues | a handful of grouped issues with markdown checkboxes |
