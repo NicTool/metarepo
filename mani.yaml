@@ -35,7 +35,8 @@ projects:
     desc: v3 web UI
     tags: [v3, app]
     env:
-      pin: v0.6.0
+      pin: main
+      train: 8
 
   validate:
     path: libs/validate
@@ -51,7 +52,7 @@ projects:
     desc: v3 zone file parsing
     tags: [v3, lib]
     env:
-      pin: v1.3.0
+      pin: main
 
   dns-nameserver:
     path: libs/dns-nameserver

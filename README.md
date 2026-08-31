@@ -113,11 +113,11 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 `NICTOOL_SERVER_HOST=localhost`, and `NICTOOL_SERVER_PORT=8082` in
 `docker/.env`. The v2 test targets set their protocol explicitly either way.
 
-## REST bridge integration
+## Unreleased member integration
 
-While api#61 and NicTool#365 are open, `mani.yaml` declares trains for both. A
-fresh workspace can assemble the exact integration branches without recording a
-personal fork:
+While api#61, NicTool#365, and server#8 are open, `mani.yaml` declares trains
+for all three. A fresh workspace can assemble the exact integration branches
+without recording a personal fork:
 
 ```sh
 make init
@@ -126,10 +126,10 @@ make train
 
 The api depends on `@nictool/validate` `^1.0.0`; `docker-compose.yml` mounts
 the manifest's `libs/validate` checkout over the installed copy so the api runs
-whatever the manifest pins. validate#31 is merged but not yet released, so the
-manifest follows validate's `main` until the next release tag replaces it. Once
-the companion PRs are merged and released, remove the manifest trains and
-restore the release pins.
+whatever the manifest pins. validate#31, #33, #34, and dns-zone#33 are merged
+but not yet released. The manifest follows both libraries' `main` branches
+until release tags replace them. Once the open PRs merge and the affected
+members are released, remove their trains and restore the release pins.
 
 `api_node_modules` is a named volume seeded from the image on first start, so a
 changed dependency only takes effect after `make clean` (or `docker volume rm

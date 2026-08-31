@@ -5,10 +5,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.58.2-noble"
-BRIDGE_TRAINS = {
+TEMPORARY_TRAINS = {
     "NicTool": ("master", 365),
     "api": ("main", 61),
+    "server": ("main", 8),
 }
+UNRELEASED_MAIN_PINS = ("validate", "dns-zone")
 
 
 def compose() -> dict:
@@ -16,18 +18,19 @@ def compose() -> dict:
 
 
 class ComposeTests(unittest.TestCase):
-    def test_manifest_declares_the_bridge_trains(self):
+    def test_manifest_declares_the_temporary_trains(self):
         manifest = yaml.safe_load((ROOT / "mani.yaml").read_text())
         projects = manifest["projects"]
 
-        for project, (pin, pull_request) in BRIDGE_TRAINS.items():
+        for project, (pin, pull_request) in TEMPORARY_TRAINS.items():
             self.assertEqual(projects[project]["env"]["pin"], pin)
             self.assertEqual(projects[project]["env"]["train"], pull_request)
 
-    def test_manifest_follows_validate_main_until_its_next_release(self):
+    def test_manifest_follows_unreleased_library_work(self):
         manifest = yaml.safe_load((ROOT / "mani.yaml").read_text())
 
-        self.assertEqual(manifest["projects"]["validate"]["env"], {"pin": "main"})
+        for project in UNRELEASED_MAIN_PINS:
+            self.assertEqual(manifest["projects"][project]["env"], {"pin": "main"})
 
     def test_api_build_takes_no_validate_spec(self):
         build = compose()["services"]["api"]["build"]
