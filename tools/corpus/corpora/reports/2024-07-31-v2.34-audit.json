@@ -1,0 +1,126 @@
+{
+  "status": "PASS",
+  "counts": {
+    "definer_clause": 0,
+    "dkim_keys": 1749,
+    "dump_host_header": 0,
+    "email_candidates": 111,
+    "hostname_fields": 23440,
+    "ipv4_candidates": 7993,
+    "ipv4_fragments": 44,
+    "ipv6_candidates": 5,
+    "known_indicator_manifest": 0,
+    "known_indicator_sql": 0,
+    "known_indicators": 0,
+    "microsoft_verification_values": 6,
+    "opaque_tokens": 79,
+    "provider_verification_values": 27,
+    "routine_or_trigger": 0,
+    "sql_comment": 0,
+    "txt_values": 5388,
+    "source_candidates": 4637313,
+    "source_global_indicators": 20373,
+    "source_global_matches": 0
+  },
+  "failures": {},
+  "rows": {
+    "nt_delegate": 5,
+    "nt_delegate_log": 8,
+    "nt_group": 29,
+    "nt_group_log": 41,
+    "nt_group_subgroups": 48,
+    "nt_nameserver": 8,
+    "nt_nameserver_export_log": 17,
+    "nt_nameserver_export_type": 8,
+    "nt_nameserver_log": 22,
+    "nt_options": 3,
+    "nt_perm": 32,
+    "nt_user": 26,
+    "nt_user_global_log": 708,
+    "nt_user_log": 55,
+    "nt_zone": 1706,
+    "nt_zone_log": 212,
+    "nt_zone_nameserver": 6006,
+    "nt_zone_record": 13648,
+    "nt_zone_record_log": 1456,
+    "resource_record_type": 25
+  },
+  "indicator_file": "not provided",
+  "classifications": {
+    "email": {
+      "nt_user.email:example": 3,
+      "nt_user.email:test": 23,
+      "nt_user_global_log.description:test": 8,
+      "nt_user_log.email:example": 7,
+      "nt_user_log.email:test": 48,
+      "nt_zone_record.address:test": 8,
+      "nt_zone_record_log.address:test": 14
+    },
+    "hostname": {
+      "nt_nameserver.name:mapped-or-allowlisted": 8,
+      "nt_nameserver_log.name:mapped-or-allowlisted": 20,
+      "nt_zone.mailaddr:mapped-or-allowlisted": 1706,
+      "nt_zone.zone:mapped-or-allowlisted": 1706,
+      "nt_zone_log.mailaddr:mapped-or-allowlisted": 212,
+      "nt_zone_log.zone:mapped-or-allowlisted": 212,
+      "nt_zone_record.address:mapped-or-allowlisted": 3847,
+      "nt_zone_record.name:mapped-or-allowlisted": 13648,
+      "nt_zone_record_log.address:mapped-or-allowlisted": 625,
+      "nt_zone_record_log.name:mapped-or-allowlisted": 1456
+    },
+    "ipv4": {
+      "nt_nameserver.address:benchmark": 8,
+      "nt_nameserver.datadir:benchmark": 2,
+      "nt_nameserver.logdir:benchmark": 1,
+      "nt_nameserver_export_log.message:benchmark": 6,
+      "nt_nameserver_log.address:benchmark": 20,
+      "nt_nameserver_log.datadir:benchmark": 7,
+      "nt_nameserver_log.logdir:benchmark": 6,
+      "nt_user_global_log.description:benchmark": 258,
+      "nt_user_global_log.description:loopback": 1,
+      "nt_user_global_log.description:private-10": 3,
+      "nt_user_global_log.description:private-192": 4,
+      "nt_zone_record.address:benchmark": 7096,
+      "nt_zone_record.address:link-local": 1,
+      "nt_zone_record.address:loopback": 7,
+      "nt_zone_record.address:private-10": 4,
+      "nt_zone_record.address:private-192": 17,
+      "nt_zone_record.description:benchmark": 1,
+      "nt_zone_record_log.address:benchmark": 518,
+      "nt_zone_record_log.address:link-local": 1,
+      "nt_zone_record_log.address:loopback": 6,
+      "nt_zone_record_log.address:private-10": 7,
+      "nt_zone_record_log.address:private-192": 18,
+      "nt_zone_record_log.description:benchmark": 1
+    },
+    "ipv4_fragment": {
+      "nt_zone_record_log.address:benchmark": 44
+    },
+    "ipv6": {
+      "nt_user_global_log.description:documentation": 2,
+      "nt_zone_record.address:documentation": 1,
+      "nt_zone_record_log.address:documentation": 2
+    },
+    "key_material": {
+      "nt_zone_record.address:dkim": 1713,
+      "nt_zone_record_log.address:dkim": 36
+    },
+    "opaque_token": {
+      "nt_zone_record.address:rr-16": 31,
+      "nt_zone_record_log.address:rr-16": 48
+    },
+    "txt": {
+      "nt_zone_record.address:rr-16": 5159,
+      "nt_zone_record.address:rr-99": 1,
+      "nt_zone_record_log.address:rr-16": 227,
+      "nt_zone_record_log.address:rr-99": 1
+    },
+    "verification": {
+      "nt_zone_record.address:microsoft": 2,
+      "nt_zone_record.address:provider": 11,
+      "nt_zone_record_log.address:microsoft": 4,
+      "nt_zone_record_log.address:provider": 16
+    }
+  },
+  "source_input": "provided"
+}

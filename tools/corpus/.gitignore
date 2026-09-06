@@ -1,0 +1,8 @@
+# Copyright (c) 2026, The NicTool Contributors
+
+*.sql
+*.sql.gz
+*.private-*.json
+.secret
+known-indicators*.txt
+__pycache__/

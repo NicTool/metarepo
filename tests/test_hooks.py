@@ -71,6 +71,11 @@ class SayItOnceTests(unittest.TestCase):
         added = ("# " + text, *["1;"] * 10, f"ok($x, '{text}');")
         self.assertEqual(len(check.check_diff(diff("t/x.t", *added))), 1)
 
+    def test_copyright_notice_may_match_an_output_constant(self):
+        year = check.datetime.now(tz=check.timezone.utc).year
+        notice = f"Copyright (c) {year}, The NicTool Contributors"
+        self.assertEqual([], check.check_diff(diff("tool.py", "# " + notice, "", f'COPYRIGHT = "{notice}"', start=1)))
+
     def test_unrelated_comment_passes(self):
         added = ("# visible under cpanm -v only", "warn 'the client library is MariaDB';")
         self.assertEqual(check.check_diff(diff("server/Makefile.PL", *added)), [])

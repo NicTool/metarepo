@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v10.0.1
       - run: uv run --with pyyaml==6.0.2 python -m unittest discover -v
+      - run: cd tools/corpus && uv run python -B -m unittest discover -s tests -v
       - run: uvx ruff check .
       - run: python -m py_compile nt.py tests/*.py
       - run: make env

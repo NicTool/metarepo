@@ -1,0 +1,143 @@
+{
+  "address_policy": {
+    "ipv4_private": "same RFC1918 block as the source",
+    "ipv4_public": "198.18.0.0/15",
+    "ipv4_special": "link-local, loopback, carrier-grade, multicast, and unspecified keep their class",
+    "ipv6_global": "2001:db8::/32",
+    "ipv6_private": "ULA stays ULA; link-local and site-local keep their class",
+    "ipv6_special": "multicast keeps its flags and scope; loopback and unspecified are unchanged"
+  },
+  "copyright": "Copyright (c) 2026, The NicTool Contributors",
+  "corpus": {
+    "bytes": 1010291,
+    "compressed": true,
+    "sha256": "2602808f989a5b351dab395625605ba0be2dc03e3482339c5a10dcb1176d20dc",
+    "sql_bytes": 15499831,
+    "sql_sha256": "68a21278dd5ca48b770925ac9ff06b2dd6f85bc4721fe87de41a051993ab5e17"
+  },
+  "dns_target_policy": "all names use one label mapping; in-corpus CNAME, MX, NS, PTR, SRV, and DNAME targets remain internally consistent",
+  "dropped": {
+    "reason": "session material",
+    "rows": {
+      "nt_user_session": 1,
+      "nt_user_session_log": 12471
+    },
+    "tables": [
+      "nt_user_session",
+      "nt_user_session_log"
+    ]
+  },
+  "format": 2,
+  "input_contract": {
+    "db_version": "2.41",
+    "insert_layouts": [
+      "extended",
+      "non-extended"
+    ],
+    "raw_values": "NULL or numeric values in numeric columns",
+    "routines": "rejected",
+    "triggers": "rejected",
+    "unknown_sql": "rejected"
+  },
+  "license": "BSD-3-Clause",
+  "mapped": {
+    "hosts": 41786,
+    "ip4": 6175,
+    "ip6": 5,
+    "labels": 809458,
+    "truncated_text": 36,
+    "users": 248
+  },
+  "passwords": {
+    "bytes": 32,
+    "rounds": 5000,
+    "scheme": "PBKDF2-SHA512",
+    "value": "nictool-corpus"
+  },
+  "provenance": {
+    "contributor": "abraham-ingersoll",
+    "raw_source": "not retained",
+    "source_alias": "abraham-ingersoll-2026-09-06",
+    "source_date": "2026-09-06"
+  },
+  "reproducibility": "same input bytes, secret, contributor, source alias, source date, db version, static profile, retention profile, and tool version produce identical SQL, gzip, and manifest bytes",
+  "retention": {
+    "dropped_rows": {},
+    "method": "all non-session rows",
+    "profile": "full",
+    "rows_per_shape": "all",
+    "tables": []
+  },
+  "rows": {
+    "nt_delegate": 5,
+    "nt_delegate_log": 11,
+    "nt_group": 29,
+    "nt_group_log": 57,
+    "nt_group_subgroups": 48,
+    "nt_nameserver": 8,
+    "nt_nameserver_export_log": 53507,
+    "nt_nameserver_export_type": 8,
+    "nt_nameserver_log": 48,
+    "nt_options": 3,
+    "nt_perm": 32,
+    "nt_user": 27,
+    "nt_user_global_log": 30985,
+    "nt_user_log": 60,
+    "nt_zone": 278,
+    "nt_zone_log": 737,
+    "nt_zone_nameserver": 550,
+    "nt_zone_record": 1579,
+    "nt_zone_record_log": 3436,
+    "resource_record_type": 25
+  },
+  "source": {
+    "bytes": 14206940,
+    "sha256": "cd51b17675d4528871d71df2d3e31917a47df61a38dc3d35721ffcea22d1cbc3"
+  },
+  "source_rows": {
+    "nt_delegate": 5,
+    "nt_delegate_log": 11,
+    "nt_group": 29,
+    "nt_group_log": 57,
+    "nt_group_subgroups": 48,
+    "nt_nameserver": 8,
+    "nt_nameserver_export_log": 53507,
+    "nt_nameserver_export_type": 8,
+    "nt_nameserver_log": 48,
+    "nt_options": 3,
+    "nt_perm": 32,
+    "nt_user": 27,
+    "nt_user_global_log": 30985,
+    "nt_user_log": 60,
+    "nt_user_session": 1,
+    "nt_user_session_log": 12471,
+    "nt_zone": 278,
+    "nt_zone_log": 737,
+    "nt_zone_nameserver": 550,
+    "nt_zone_record": 1579,
+    "nt_zone_record_log": 3436,
+    "resource_record_type": 25
+  },
+  "static_lookup_allowlist": [
+    "nt_nameserver_export_type",
+    "resource_record_type"
+  ],
+  "static_lookup_profile": "2.41",
+  "static_string_allowlist": [
+    "nt_delegate.nt_object_type",
+    "nt_delegate_log.action",
+    "nt_delegate_log.nt_object_type",
+    "nt_group_log.action",
+    "nt_nameserver_log.action",
+    "nt_user_global_log.action",
+    "nt_user_global_log.object",
+    "nt_user_global_log.target",
+    "nt_user_log.action",
+    "nt_zone_log.action",
+    "nt_zone_record_log.action"
+  ],
+  "tool": {
+    "name": "anonymize.py",
+    "version": "0.7.0"
+  }
+}

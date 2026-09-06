@@ -67,6 +67,19 @@ if __name__ == "__main__":
 class TestSummaryTests(unittest.TestCase):
     GUARD = "(fail|skipped|cancelled) [1-9]"
 
+    def test_library_failure_does_not_prevent_remaining_suites(self):
+        stub = '''docker() {
+case "$*" in
+  *"/libs/validate "*) echo '# tests 1'; echo '# fail 1'; return 1 ;;
+  *) echo '# tests 1'; echo '# pass 1'; return 0 ;;
+esac
+}
+'''
+        result = subprocess.run(["bash", "-c", stub + make_dry_run("test-libs")], capture_output=True, text=True, check=False)
+        self.assertNotEqual(0, result.returncode)
+        for name in ("validate", "dns-zone", "dns-resource-record", "dns-nameserver"):
+            self.assertIn("==> libs/" + name, result.stdout)
+
     def test_node_suites_fail_on_skipped_or_cancelled_tests(self):
         for target in ("test-api", "test-api-backends", "test-libs"):
             with self.subTest(target=target):
