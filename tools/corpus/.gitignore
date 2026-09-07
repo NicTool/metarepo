@@ -6,3 +6,5 @@
 .secret
 known-indicators*.txt
 __pycache__/
+
+/corpora/
