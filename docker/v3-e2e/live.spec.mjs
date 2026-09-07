@@ -1,0 +1,21 @@
+import { expect, test } from '@playwright/test'
+
+test('login, read zones and nameservers, then logout through the real API', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('#username').fill(process.env.NICTOOL_TEST_USER)
+  await page.locator('#password').fill(process.env.NICTOOL_TEST_PASSWORD)
+  const login = page.waitForResponse((r) => r.url().endsWith('/api/session') && r.request().method() === 'POST')
+  const zones = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/zone')
+  const nameservers = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/nameserver')
+  await page.locator('#login_form_submit').click()
+  expect((await login).status()).toBe(200)
+  await expect(page.locator('#mainTabs')).toBeVisible()
+  expect((await zones).status()).toBe(200)
+  await expect(page.locator('#zoneTable')).toBeVisible()
+  await page.locator('#tab-nameservers').click()
+  expect((await nameservers).status()).toBe(200)
+  await page.locator('#profileMenu').click()
+  await page.locator('#logout_button').click()
+  await expect(page.locator('#login_div')).toBeVisible()
+  await expect(page.locator('#mainTabs')).toBeHidden()
+})

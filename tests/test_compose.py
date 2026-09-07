@@ -7,10 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.58.2-noble"
 TEMPORARY_TRAINS = {
     "NicTool": ("master", 365),
-    "api": ("main", 61),
+    "api": ("main", "70 61 68"),
     "server": ("main", 8),
+    "dns-resource-record": ("main", 69),
 }
-UNRELEASED_MAIN_PINS = ("validate", "dns-zone")
+UNRELEASED_MAIN_PINS = ("dns-zone",)
 
 
 def compose() -> dict:

@@ -1,0 +1,22 @@
+diff --git a/server/t/13_rest_transport_gui.t b/server/t/13_rest_transport_gui.t
+index 1b4358f..40b7462 100644
+--- a/server/t/13_rest_transport_gui.t
++++ b/server/t/13_rest_transport_gui.t
+@@ -425,7 +425,7 @@ ok !exists $zone_body->{template}, 'client-side record template is omitted';
+ 
+ my $edit_zone = transport(
+     response({ zone => [ {
+-        id => 9, gid => 2, zone => 'new.test', serial => 2026083100,
++        id => 9, gid => 2, zone => 'new.test', serial => $new_serial,
+     } ] }),
+     response({ zone => [ { id => 9, gid => 2 } ] }),
+ );
+@@ -444,7 +444,7 @@ ok !exists $edit_zone_body->{zone}, 'zone edit omits the immutable name';
+ ok !exists $edit_zone_body->{gid}, 'zone edit omits the browsed group id';
+ is_deeply $edit_zone_body->{nameservers}, [], 'zone edit clears an empty nameserver selection';
+ is $edit_zone_body->{ttl}, 7200, 'zone edit retains mutable fields';
+-is $edit_zone_body->{serial}, 2026083101,
++is $edit_zone_body->{serial}, $new_serial + 1,
+     'zone edit bumps the stored serial when the caller omits it';
+ 
+ my $move_zone = transport(response({ zone => [ { id => 9, gid => 4 } ] }));

@@ -77,7 +77,7 @@ clean: env ## Stop all and remove volumes
 
 test: test-api test-libs ## Run v3 API + library tests (requires make up)
 
-test-all: test test-api-backends test-v2-rest test-v2-xt test-v2-e2e-rest ## Every suite, v3 and v2, in order (requires make up-legacy)
+test-all: test test-api-backends test-server test-v3-e2e test-v2-unit test-v2-rest test-v2-xt test-v2-e2e-rest test-v3-e2e-live ## Every suite, v3 and v2, in order (requires make up-all)
 
 test-api: ## Run API tests (requires make up)
 	@$(call node_suite,docker compose --env-file docker/.env exec -T api npm test)
@@ -93,6 +93,20 @@ stress-api: env ## Repeat API tests under a runtime image (RUNTIME=node:24 N=25;
 
 test-server: ## Run server tests (requires make up-ui)
 	docker compose --env-file docker/.env --profile ui exec -T server npm test
+
+.PHONY: test-v3-e2e
+test-v3-e2e: ## Run v3 browser tests (requires make up-ui)
+	@version=$$(docker compose --env-file docker/.env --profile ui exec -T server node -p 'require("@playwright/test/package.json").version') && \
+	NICTOOL_V3_PLAYWRIGHT_VERSION="$$version" docker compose --env-file docker/.env --profile all --profile test run --rm --no-deps -T v3-e2e
+
+.PHONY: test-v3-e2e-live
+test-v3-e2e-live: ## Test v3 login and reads against the live API (requires make up-all)
+	@user=$$(sed -n "s/^[[:space:]]*username[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
+	password=$$(sed -n "s/^[[:space:]]*password[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
+	test -n "$$user" && test -n "$$password" || { echo 'REST test credentials are missing; recreate nictool-legacy' >&2; exit 1; }; \
+	version=$$(docker compose --env-file docker/.env --profile ui exec -T server node -p 'require("@playwright/test/package.json").version') && \
+	NICTOOL_V3_PLAYWRIGHT_VERSION="$$version" $(V2_E2E_EXEC) -e NICTOOL_TEST_USER="$$user" -e NICTOOL_TEST_PASSWORD="$$password" \
+		v3-e2e npx playwright test --config workspace-e2e/playwright.config.mjs
 
 test-libs: ## Run library tests (no running services needed)
 	@suite_result=0; for lib in validate dns-zone dns-resource-record; do \

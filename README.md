@@ -105,7 +105,7 @@ existing root user unchanged.
 | `ui` | `db` + `api` + `server` |
 | `legacy` | `db` + `api` + `nictool-legacy` |
 | `e2e` | `db` + `api` + `server` |
-| `test` | One-off v2 Playwright runner |
+| `test` | One-off v2 and v3 Playwright runners |
 | `all` | All four services |
 
 The v2 GUI in `nictool-legacy` talks to the v3 api over REST. To point it back
@@ -115,21 +115,28 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 
 ## Unreleased member integration
 
-While api#61, NicTool#365, and server#8 are open, `mani.yaml` declares trains
-for all three. A fresh workspace can assemble the exact integration branches
-without recording a personal fork:
+`mani.yaml` declares trains for api#70, #61, and #68, NicTool#365, server#8,
+and dns-resource-record#69, including the draft API PRs. A fresh workspace can
+assemble the integration branches without recording a personal fork:
 
 ```sh
 make init
 make train
 ```
 
-The api depends on `@nictool/validate` `^1.0.0`; `docker-compose.yml` mounts
-the manifest's `libs/validate` checkout over the installed copy so the api runs
-whatever the manifest pins. validate#31, #33, #34, and dns-zone#33 are merged
-but not yet released. The manifest follows both libraries' `main` branches
-until release tags replace them. Once the open PRs merge and the affected
-members are released, remove their trains and restore the release pins.
+The trains apply the patches in `trains/`. API patches resolve overlapping PRs.
+The NicTool patch removes a fixed-date serial test fixture. Each patch
+checks the preceding tree and PR head before applying. If either changes,
+`make train` stops for a new resolution. Existing feature branches remain intact.
+The API and v3 UI mount the record library train directly.
+
+The api depends on `@nictool/validate` `^1.0.1`. Compose mounts the manifest's
+v1.0.1 checkout over the installed copy. dns-zone still follows `main` for
+unreleased changes. Remove trains after their PRs merge and restore release
+pins when those changes ship.
+
+The v3 browser targets select the Playwright image matching the installed
+server package, including when an older dependency volume is reused.
 
 `api_node_modules` is a named volume seeded from the image on first start, so a
 changed dependency only takes effect after `make clean` (or `docker volume rm
@@ -143,6 +150,8 @@ All tests run inside containers.
 make test           # API + library tests (requires make up)
 make test-api       # just the API tests
 make test-server    # just the server tests (requires make up-ui)
+make test-v3-e2e    # v3 browser tests (requires make up-ui)
+make test-v3-e2e-live # v3 login and reads against the real API (requires make up-all)
 make test-libs      # just the four libraries (no running services needed)
 ```
 

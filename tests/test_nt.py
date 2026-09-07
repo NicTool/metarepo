@@ -1,7 +1,9 @@
 import io
+import json
 import nt
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import call, patch
 
@@ -154,3 +156,68 @@ class LintTests(unittest.TestCase):
             nt.cmd_lint([missing])
         for args, kwargs in sh.call_args_list:
             self.assertNotEqual(kwargs.get("cwd"), missing.path)
+
+
+class TrainResolutionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = nt.Path(temporary.name)
+        self.repo = self.root / 'api'
+        self.repo.mkdir()
+        self.project = nt.Project('api', self.repo, '', 'main', [61])
+        self.git('init', '-q', '-b', 'main')
+        self.git('config', 'user.name', 'Test')
+        self.git('config', 'user.email', 'test@example.com')
+        self.git('config', 'core.hooksPath', '/dev/null')
+        self.write_commit('base')
+        self.git('switch', '-qc', 'pr')
+        self.write_commit('right')
+        self.git('update-ref', 'refs/nt/pr/61', 'HEAD')
+        self.git('switch', '-q', 'main')
+        self.write_commit('left')
+        self.git('merge', '--no-ff', '--no-commit', 'refs/nt/pr/61', check=False)
+        directory = self.root / 'trains' / 'api'
+        directory.mkdir(parents=True)
+        (self.repo / 'value').write_text('both\n')
+        (directory / '61.patch').write_text(self.git('diff', 'AUTO_MERGE'))
+        (directory / '61.json').write_text(json.dumps({
+            'base_tree': self.git('rev-parse', 'HEAD^{tree}').strip(),
+            'head': self.git('rev-parse', 'refs/nt/pr/61').strip(),
+        }))
+        (self.repo / 'value').write_text(self.git('show', 'AUTO_MERGE:value'))
+
+    def git(self, *args, check=True):
+        return subprocess.run(['git', '-C', str(self.repo), *args],
+                              text=True, capture_output=True, check=check).stdout
+
+    def write_commit(self, value):
+        (self.repo / 'value').write_text(value + '\n')
+        self.git('add', 'value')
+        self.git('commit', '-qm', value)
+
+    def test_resolution_preserves_both_merge_parents(self):
+        parents = [self.git('rev-parse', ref).strip() for ref in ['HEAD', 'refs/nt/pr/61']]
+        with patch.object(nt, 'ROOT', self.root):
+            self.assertTrue(nt.resolve_train_merge(self.project, 61))
+        self.assertEqual(self.git('show', '-s', '--format=%P').split(), parents)
+        self.assertEqual((self.repo / 'value').read_text(), 'both\n')
+        self.assertEqual(self.git('status', '--porcelain'), '')
+
+    def test_changed_pr_is_rejected_without_touching_conflicts(self):
+        before = (self.repo / 'value').read_text()
+        self.git('update-ref', 'refs/nt/pr/61', 'HEAD')
+        with patch.object(nt, 'ROOT', self.root):
+            self.assertFalse(nt.resolve_train_merge(self.project, 61))
+        self.assertEqual((self.repo / 'value').read_text(), before)
+        self.assertTrue(self.git('diff', '--name-only', '--diff-filter=U'))
+
+    def test_changed_base_is_rejected_without_touching_conflicts(self):
+        metadata = self.root / 'trains' / 'api' / '61.json'
+        expected = json.loads(metadata.read_text())
+        expected['base_tree'] = '0' * 40
+        metadata.write_text(json.dumps(expected))
+        before = (self.repo / 'value').read_text()
+        with patch.object(nt, 'ROOT', self.root):
+            self.assertFalse(nt.resolve_train_merge(self.project, 61))
+        self.assertEqual((self.repo / 'value').read_text(), before)
