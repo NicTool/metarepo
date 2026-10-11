@@ -56,6 +56,15 @@ test('NicTool mappings feed record constructors and BIND round trips', () => {
   }
 })
 
+test('relative targets resolve against their zone', () => {
+  for (const entry of [record(5, 'mail'), record(15, '@', { weight: '10' }), record(2, 'ns1')]) {
+    assert.equal(checkRecord(entry).stage, 'pass')
+  }
+  const relative = { ...zone, mailaddr: 'hostmaster', mname: 'ns' }
+  const report = checkCorpus({ format: 1, zones: [{ after: relative }], records: [] })
+  assert.equal(report.zones.after.passed, 1)
+})
+
 test('old defects and new failures stay distinguishable', () => {
   const valid = checkRecord(record(1, '198.18.1.2'))
   const invalid = checkRecord(record(1, '8.9'))

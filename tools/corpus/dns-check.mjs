@@ -26,7 +26,7 @@ function construct({ row, zone }) {
   }
   RR.unApplyMap(args, RR.getMap(type))
   for (const field of Record.rdataFields ?? []) {
-    if (Array.isArray(field) && field[1] === 'fqdn') args[field[0]] = fqdn(args[field[0]])
+    if (Array.isArray(field) && field[1] === 'fqdn') args[field[0]] = legacyOwner(args[field[0]], zone?.zone)
   }
   return new Record(args)
 }
@@ -57,7 +57,11 @@ export function compare(before, after) {
 
 function checkZone(zone, entries) {
   try {
-    const soa = { owner: fqdn(zone.zone), mname: fqdn(zone.mname), rname: fqdn(zone.mailaddr) }
+    const soa = {
+      owner: fqdn(zone.zone),
+      mname: legacyOwner(zone.mname, zone.zone),
+      rname: legacyOwner(zone.mailaddr, zone.zone),
+    }
     for (const key of ['ttl', 'serial', 'refresh', 'retry', 'expire', 'minimum']) soa[key] = Number(zone[key])
     const target = new ZONE({ origin: fqdn(zone.zone) })
     target.addRR(new RR.SOA(soa))

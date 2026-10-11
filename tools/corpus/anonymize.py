@@ -1174,8 +1174,9 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
         handled.update(columns)
     elif table in {"nt_zone", "nt_zone_log"}:
         source_zone = result[columns.index("zone")]
-        for name in ("zone", "mailaddr"):
-            change(name, mapper.host)
+        zone_context = None if isinstance(source_zone, Raw) else source_zone
+        change("mailaddr", lambda value: mapper.record_host(value, zone_context))
+        change("zone", mapper.host)
         if table == "nt_zone" and not isinstance(source_zone, Raw):
             mapped_zone = result[columns.index("zone")].rstrip(".").lower()
             if mapper.zone_owners.setdefault(mapped_zone, source_zone.rstrip(".").lower()) != source_zone.rstrip(".").lower():

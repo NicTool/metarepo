@@ -484,6 +484,14 @@ class DumpContractTests(unittest.TestCase):
         self.assertNotIn("private-ca", output)
         self.assertIn("'.'", output)
 
+    def test_relative_soa_mailbox_stays_relative(self):
+        zone = row_for("nt_zone", nt_zone_id=anonymize.Raw("1"), zone="private.example", mailaddr="hostmaster")
+        sql = create_table("nt_zone") + "\nINSERT INTO `nt_zone` VALUES " + zone + ";\n"
+
+        output, _ = anonymize.anonymize_sql(sql, SECRET, require_complete=False)
+
+        self.assertIn("'hostmaster'", output)
+
     def test_zones_that_map_to_one_name_stop_the_run(self):
         zones = ",".join(
             row_for("nt_zone", nt_zone_id=anonymize.Raw(str(index)), zone=zone)
