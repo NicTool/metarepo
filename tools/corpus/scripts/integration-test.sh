@@ -78,14 +78,21 @@ export NICTOOL_DNS_RESOURCE_RECORD_SOURCE="$record_source"
 compose=(docker compose --env-file "$workspace/docker/.env")
 suite_log_dir=$(mktemp -d "${TMPDIR:-/tmp}/nictool-corpus-tests.XXXXXX")
 chmod 700 "$suite_log_dir"
+# setup-test-env.pl rewrites these, so the run gets copies the checkout never sees.
+mkdir -p "$workspace/local"
+legacy_cfg_dir=$(mktemp -d "$workspace/local/corpus-legacy-cfg.XXXXXX")
+chmod 700 "$legacy_cfg_dir"
+touch "$legacy_cfg_dir/test.cfg" "$legacy_cfg_dir/test-rest.cfg" "$legacy_cfg_dir/api-test.cfg"
+export NICTOOL_CORPUS_CFG_DIR="$legacy_cfg_dir"
 cleanup() {
     if [[ -n "$suite_log_dir" && -d "$suite_log_dir" ]]; then
         rm -rf -- "$suite_log_dir"
     fi
     if [[ "$keep" == true ]]; then
-        echo "kept compose project $COMPOSE_PROJECT_NAME"
+        echo "kept compose project $COMPOSE_PROJECT_NAME and $legacy_cfg_dir"
     else
         "${compose[@]}" --profile all --profile test down -v --remove-orphans
+        rm -rf -- "$legacy_cfg_dir"
     fi
 }
 trap cleanup EXIT

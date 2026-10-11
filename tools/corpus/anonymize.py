@@ -130,6 +130,7 @@ class Mapper:
         self.usernames = {}
         self.username_owners = {}
         self.zones = {}
+        self.ip4_owners = {}
 
     def label(self, value):
         low = value.lower()
@@ -259,7 +260,24 @@ class Mapper:
             if value == int(parts[position]):
                 value = low + (value - low + 1) % (high - low + 1)
             mapped.append(str(value))
-        return ".".join(mapped[:count])
+        probe = None
+        if count == 3:
+            probe = (kind, low, high) if category not in {"multicast"} else ("fixed", 0, 255)
+        return self._claim_ip4(".".join(parts), mapped[:count], probe)
+
+    def _claim_ip4(self, source, mapped, probe):
+        # Distinct sources must stay distinct: probe the last octet, and refuse a
+        # short prefix whose whole mapped range is already taken.
+        for _ in range(256):
+            candidate = ".".join(mapped)
+            owner = self.ip4_owners.setdefault(candidate, source)
+            if owner == source:
+                return candidate
+            if probe is None:
+                raise InputError(f"IPv4 prefixes collide after mapping: /{8 * len(mapped)}")
+            _, low, high = probe
+            mapped[-1] = str(low + (int(mapped[-1]) - low + 1) % (high - low + 1))
+        raise InputError(f"IPv4 prefixes collide after mapping: /{8 * len(mapped)}")
 
     @staticmethod
     def _ip4_category(parts):
@@ -294,7 +312,7 @@ class Mapper:
         host = self.oracle.integer(f"ip4/{category}/3", str(address), 0, 255)
         if host == int(value.rsplit(".", 1)[1]):
             host = (host + 1) % 256
-        return f"{prefix}.{host}"
+        return self._claim_ip4(str(address), [*prefix.split("."), str(host)], ("host", 0, 255))
 
     def ip4_field(self, value):
         if not value:

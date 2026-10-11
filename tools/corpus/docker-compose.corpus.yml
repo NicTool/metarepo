@@ -29,6 +29,9 @@ services:
       - ${NICTOOL_LEGACY_SOURCE}/server:/usr/local/nictool/server
       - ${NICTOOL_LEGACY_SOURCE}/client:/usr/local/nictool/client
       - ${NICTOOL_LEGACY_SOURCE}/dist:/usr/local/nictool/dist:ro
+      - ${NICTOOL_CORPUS_CFG_DIR}/test.cfg:/usr/local/nictool/server/t/test.cfg
+      - ${NICTOOL_CORPUS_CFG_DIR}/test-rest.cfg:/usr/local/nictool/server/t/test-rest.cfg
+      - ${NICTOOL_CORPUS_CFG_DIR}/api-test.cfg:/usr/local/nictool/server/api/t/test.cfg
     environment:
       NICTOOL_DB_NAME: ${NICTOOL_DB_NAME:-nictool_corpus}
       NICTOOL_TEST_ENV: "1"

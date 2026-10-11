@@ -125,6 +125,20 @@ class MapperTests(unittest.TestCase):
                 relative = self.mapper.record_host(".".join(owner.split(".")[:16]), zone.rstrip("."))
                 self.assertRegex(relative, r"^([0-9a-f]\.){15}[0-9a-f]$")
 
+    def test_distinct_ip4_prefixes_stay_distinct(self):
+        sources = [f"{first}.{second}.7" for first in range(1, 9) for second in range(40)]
+        mapped = [self.mapper.ip4_prefix(source, 3) for source in sources]
+        addresses = {self.mapper.ip4(f"{source}.9") for source in sources}
+
+        self.assertEqual(len(set(mapped)), len(sources))
+        self.assertEqual(len(addresses), len(sources))
+        self.assertEqual({address.rsplit(".", 1)[0] for address in addresses}, set(mapped))
+
+    def test_public_ip4_prefixes_that_cannot_fit_stop_the_run(self):
+        with self.assertRaisesRegex(anonymize.InputError, "IPv4 prefixes collide"):
+            for first in range(1, 9):
+                self.mapper.ip4_prefix(f"{first}.1", 2)
+
     def test_opaque_underscore_label_is_replaced(self):
         source = "_93eb26a4e9cb12d915d090befff63c6c"
         mapped = self.mapper.label(source)
