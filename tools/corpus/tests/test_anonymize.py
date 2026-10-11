@@ -529,6 +529,11 @@ class DumpContractTests(unittest.TestCase):
         self.assertNotIn(fingerprint, output)
         self.assertRegex(output, r"'[0-9a-f]{40}'")
 
+    def test_restore_keeps_zero_ids(self):
+        output, _ = anonymize.anonymize_sql(create_table("nt_group") + "\n", SECRET, require_complete=False)
+
+        self.assertLess(output.index("NO_AUTO_VALUE_ON_ZERO"), output.index("CREATE TABLE"))
+
     def test_zones_that_map_to_one_name_stop_the_run(self):
         zones = ",".join(
             row_for("nt_zone", nt_zone_id=anonymize.Raw(str(index)), zone=zone)

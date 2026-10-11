@@ -1414,7 +1414,7 @@ def anonymize_sql(
     people = discover_people(items, mapper, known_columns)
     discover_zones(items, mapper, known_columns)
     limits = column_limits(items)
-    output = ["SET NAMES utf8mb4;", "SET FOREIGN_KEY_CHECKS=0;"]
+    output = ["SET NAMES utf8mb4;", "SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';", "SET FOREIGN_KEY_CHECKS=0;"]
     counts = Counter()
     source_counts = Counter()
     dropped = Counter()
