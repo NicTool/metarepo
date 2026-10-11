@@ -104,8 +104,9 @@ class MapperTests(unittest.TestCase):
             self.assertEqual(value, self.mapper.record_host(value, "example.com"))
 
     def test_single_label_zone_is_the_suffix_of_its_names(self):
-        zone = self.mapper.host("lan")
+        zone = self.mapper.zone("lan")
         self.assertTrue(self.mapper.host("printer.lan.").endswith("." + zone + "."))
+        self.assertEqual("ns1", self.mapper.host("ns1"))
         self.assertEqual(self.mapper.record_host("printer", "lan") + "." + zone + ".", self.mapper.host("printer.lan."))
 
     def test_spf_ip6_mechanisms_stay_addresses(self):

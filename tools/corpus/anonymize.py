@@ -187,9 +187,15 @@ class Mapper:
                     labels = leading_ip.group(2)[1:].split(".")
                     lowered = [label.lower() for label in labels]
             mapped = mapped_prefix + [self.label(label) for label in labels]
-            mapped.append(self.oracle.pick("tld", lowered[-1], FAKE_TLDS))
+            if len(labels) > 1 or trailing_dot:
+                mapped.append(self.oracle.pick("tld", lowered[-1], FAKE_TLDS))
         self.seen["hosts"] += 1
         return ".".join(mapped) + ("." if trailing_dot else "")
+
+    def zone(self, value):
+        if not value or value.endswith("."):
+            return self.host(value)
+        return self.host(value + ".")[:-1]
 
     def record_host(self, value, zone):
         # NicTool qualifies a name by appending its zone unless it ends in a dot or already ends with the zone.
@@ -1202,7 +1208,7 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
         source_zone = result[columns.index("zone")]
         zone_context = None if isinstance(source_zone, Raw) else source_zone
         change("mailaddr", lambda value: mapper.record_host(value, zone_context))
-        change("zone", mapper.host)
+        change("zone", mapper.zone)
         if table == "nt_zone" and not isinstance(source_zone, Raw):
             mapped_zone = result[columns.index("zone")].rstrip(".").lower()
             if mapper.zone_owners.setdefault(mapped_zone, source_zone.rstrip(".").lower()) != source_zone.rstrip(".").lower():
