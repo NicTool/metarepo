@@ -469,6 +469,31 @@ class DumpContractTests(unittest.TestCase):
             with self.subTest(local=local), self.assertRaises(anonymize.InputError):
                 anonymize.anonymize_sql(create_table("nt_group") + "\n" + alter.format(local, remote), SECRET, require_complete=False)
 
+    def test_caa_tags_and_root_targets_survive(self):
+        records = ",".join(
+            (
+                row_for("nt_zone_record", nt_zone_record_id=anonymize.Raw("1"), nt_zone_id=anonymize.Raw("7"), name="@", type_id=anonymize.Raw("257"), address="private-ca.example", other="issue"),
+                row_for("nt_zone_record", nt_zone_record_id=anonymize.Raw("2"), nt_zone_id=anonymize.Raw("7"), name="@", type_id=anonymize.Raw("15"), address="."),
+            )
+        )
+        sql = create_table("nt_zone_record") + "\nINSERT INTO `nt_zone_record` VALUES " + records + ";\n"
+
+        output, _ = anonymize.anonymize_sql(sql, SECRET, require_complete=False)
+
+        self.assertIn("'issue'", output)
+        self.assertNotIn("private-ca", output)
+        self.assertIn("'.'", output)
+
+    def test_zones_that_map_to_one_name_stop_the_run(self):
+        zones = ",".join(
+            row_for("nt_zone", nt_zone_id=anonymize.Raw(str(index)), zone=zone)
+            for index, zone in enumerate(("0.6.8.4.1.0.0.2.ip6.arpa", "0.2.0.2.1.0.0.2.ip6.arpa"), 1)
+        )
+        sql = create_table("nt_zone") + "\nINSERT INTO `nt_zone` VALUES " + zones + ";\n"
+
+        with self.assertRaisesRegex(anonymize.InputError, "distinct zones map to the same name"):
+            anonymize.anonymize_sql(sql, SECRET, require_complete=False)
+
     def test_non_allowlisted_static_row_stops_the_run(self):
         sql = create_table("resource_record_type") + "\nINSERT INTO `resource_record_type` VALUES (65000,'PRIVATE','private value',0,0,0);\n"
 

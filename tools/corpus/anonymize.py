@@ -74,6 +74,7 @@ KEEP_LABELS = {"www", "mail", "ns", "ns1", "ns2", "ns3", "mx", "mx1", "mx2", "sm
 KEEP_UNDERSCORE_LABELS = {"_acme-challenge", "_domainkey", "_dmarc", "_tcp", "_udp"}
 FAKE_TLDS = ("test", "example")
 SAFE_IP4 = {ipaddress.IPv4Address("127.0.0.1")}
+CAA_TAGS = {"issue", "issuewild", "iodef", "issuemail", "issuevmc", "contactemail", "contactphone"}
 SAFE_IP6 = {ipaddress.IPv6Address("::"), ipaddress.IPv6Address("::1")}
 TXT_WORDS = {"a", "adkim", "all", "aspf", "dkim1", "dmarc1", "ed25519", "email", "exists", "fo", "h", "include", "ip4", "ip6", "k", "mailto", "mx", "none", "p", "pct", "ptr", "quarantine", "reject", "relaxed", "redirect", "rsa", "rua", "ruf", "s", "sha1", "sha256", "spf1", "strict", "t", "v"}
 
@@ -131,6 +132,7 @@ class Mapper:
         self.username_owners = {}
         self.zones = {}
         self.ip4_owners = {}
+        self.zone_owners = {}
 
     def label(self, value):
         low = value.lower()
@@ -167,7 +169,7 @@ class Mapper:
         return prefix + mapped
 
     def host(self, name):
-        if not name:
+        if not name or name == ".":
             return name
         trailing_dot = name.endswith(".")
         raw = name[:-1] if trailing_dot else name
@@ -191,7 +193,7 @@ class Mapper:
 
     def record_host(self, value, zone):
         # NicTool qualifies a name by appending its zone unless it ends in a dot or already ends with the zone.
-        if not value or value in {"@", "*"}:
+        if not value or value in {"@", "*", "."}:
             return value
         if value.endswith(".") or not zone:
             return self.host(value) if "." in value or value.endswith(".") else self.label(value)
@@ -1171,8 +1173,13 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
             raise InputError(f"non-allowlisted static lookup row in {table}")
         handled.update(columns)
     elif table in {"nt_zone", "nt_zone_log"}:
+        source_zone = result[columns.index("zone")]
         for name in ("zone", "mailaddr"):
             change(name, mapper.host)
+        if table == "nt_zone" and not isinstance(source_zone, Raw):
+            mapped_zone = result[columns.index("zone")].rstrip(".").lower()
+            if mapper.zone_owners.setdefault(mapped_zone, source_zone.rstrip(".").lower()) != source_zone.rstrip(".").lower():
+                raise InputError("distinct zones map to the same name")
         for name in ("description", "location"):
             if name in columns:
                 change(name, lambda value: mapper.words(value, people))
@@ -1196,7 +1203,7 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
             change("address", lambda value: mapper.txt(value, people))
         for name in ("description", "location"):
             change(name, lambda value: mapper.words(value, people))
-        change("other", lambda value: value if re.fullmatch(r"[\d\s]*", value) else mapper.txt(value, people))
+        change("other", lambda value: value if re.fullmatch(r"[\d\s]*", value) or (record_type == "257" and value.lower() in CAA_TAGS) else mapper.txt(value, people))
         if table == "nt_zone_record_log":
             change("action", lambda value: static_string(table, "action", value))
     elif table in {"nt_user", "nt_user_log"}:
