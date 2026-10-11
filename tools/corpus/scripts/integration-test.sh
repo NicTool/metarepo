@@ -38,6 +38,7 @@ manifest=${manifest%.sql}.manifest.json
 api_source=${NICTOOL_API_SOURCE:-$workspace/api}
 legacy_source=${NICTOOL_LEGACY_SOURCE:-$workspace/NicTool}
 validate_source=${NICTOOL_VALIDATE_SOURCE:-$workspace/libs/validate}
+record_source=${NICTOOL_DNS_RESOURCE_RECORD_SOURCE:-$workspace/libs/dns-resource-record}
 
 [[ -f "$corpus" && -f "$manifest" ]] || usage
 [[ -f "$workspace/docker-compose.yml" ]] || usage
@@ -72,6 +73,7 @@ export DB_PORT=0 API_PORT=0 SERVER_PORT=0 LEGACY_HTTP_PORT=0 LEGACY_HTTPS_PORT=0
 export NICTOOL_API_SOURCE="$api_source"
 export NICTOOL_LEGACY_SOURCE="$legacy_source"
 export NICTOOL_VALIDATE_SOURCE="$validate_source"
+export NICTOOL_DNS_RESOURCE_RECORD_SOURCE="$record_source"
 
 compose=(docker compose --env-file "$workspace/docker/.env")
 suite_log_dir=$(mktemp -d "${TMPDIR:-/tmp}/nictool-corpus-tests.XXXXXX")

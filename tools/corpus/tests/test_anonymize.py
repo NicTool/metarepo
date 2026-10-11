@@ -108,6 +108,23 @@ class MapperTests(unittest.TestCase):
         self.assertTrue(self.mapper.host("printer.lan.").endswith("." + zone + "."))
         self.assertEqual(self.mapper.record_host("printer", "lan") + "." + zone + ".", self.mapper.host("printer.lan."))
 
+    def test_spf_ip6_mechanisms_stay_addresses(self):
+        mapped = self.mapper.txt("v=spf1 ip6:2001:4860::/32 ip4:203.0.113.5 -all", {})
+
+        self.assertRegex(mapped, r"^v=spf1 ip6:2001:db8:[0-9a-f:]+/32 ip4:[0-9.]+ -all$")
+        self.assertNotIn("4860", mapped)
+
+    def test_ip6_reverse_zones_contain_their_mapped_addresses(self):
+        for address in ("2001:4860:1234:5678::1", "fd12:3456::1", "fe80::1"):
+            with self.subTest(address=address):
+                owner = ipaddress.IPv6Address(address).reverse_pointer + "."
+                zone = ".".join(owner.split(".")[16:])
+                mapped_owner = ipaddress.IPv6Address(self.mapper.ip6(address)).reverse_pointer + "."
+                self.assertEqual(mapped_owner, self.mapper.host(owner))
+                self.assertTrue(mapped_owner.endswith("." + self.mapper.host(zone)))
+                relative = self.mapper.record_host(".".join(owner.split(".")[:16]), zone.rstrip("."))
+                self.assertRegex(relative, r"^([0-9a-f]\.){15}[0-9a-f]$")
+
     def test_opaque_underscore_label_is_replaced(self):
         source = "_93eb26a4e9cb12d915d090befff63c6c"
         mapped = self.mapper.label(source)
@@ -425,6 +442,18 @@ class DumpContractTests(unittest.TestCase):
 
         self.assertNotIn("customer_fk", output)
         self.assertIn("CONSTRAINT `ix_nt_group_1`", output)
+
+    def test_alter_foreign_keys_carry_only_known_columns(self):
+        alter = "ALTER TABLE `nt_group` ADD CONSTRAINT `customer_fk` FOREIGN KEY ({}) REFERENCES `nt_group` ({}) ON DELETE CASCADE;"
+        safe = create_table("nt_group") + "\n" + alter.format("`parent_group_id`", "`nt_group_id`")
+
+        output, _ = anonymize.anonymize_sql(safe, SECRET, require_complete=False)
+
+        self.assertIn("FOREIGN KEY (`parent_group_id`) REFERENCES `nt_group` (`nt_group_id`)", output)
+        self.assertNotIn("customer_fk", output)
+        for local, remote in (("`parent_group_id` customer_secret", "`nt_group_id`"), ("`parent_group_id`, `deleted`", "`nt_group_id`")):
+            with self.subTest(local=local), self.assertRaises(anonymize.InputError):
+                anonymize.anonymize_sql(create_table("nt_group") + "\n" + alter.format(local, remote), SECRET, require_complete=False)
 
     def test_non_allowlisted_static_row_stops_the_run(self):
         sql = create_table("resource_record_type") + "\nINSERT INTO `resource_record_type` VALUES (65000,'PRIVATE','private value',0,0,0);\n"

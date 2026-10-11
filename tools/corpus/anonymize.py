@@ -102,7 +102,7 @@ def mapped_ipv4_fragment(parts):
 class Mapper:
     EMAIL_RE = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", re.IGNORECASE)
     IP4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){1,3}\d{1,3}(?![\d.])")
-    IP6_RE = re.compile(r"(?<![\w:.])(?=[0-9a-f:]*:)[0-9a-f:]+(?![\w:.])", re.IGNORECASE)
+    IP6_RE = re.compile(r"(?:(?<=\bip6:)|(?<![\w:.]))(?=[0-9a-f:]*:)[0-9a-f:]+(?![\w:.])", re.IGNORECASE)
     HOST_RE = re.compile(r"(?<![\w.-])(?:\*\.)?(?=[a-z0-9_.*-]*[a-z_])[a-z0-9_*-]+(?:\.[a-z0-9_*-]+)+\.?(?![\w.-])", re.IGNORECASE)
     WORD_RE = re.compile(r"[^\W\d_](?:[^\W_]|[-'][^\W_])*", re.UNICODE)
     DKIM_RE = re.compile(r"(\bp\s*=\s*)((?:[\"']?[a-z0-9+/=]+[\"']?)(?:\s+[\"']?[a-z0-9+/=]+[\"']?)*)", re.IGNORECASE)
@@ -215,23 +215,9 @@ class Mapper:
             if nibbles and all(re.fullmatch(r"[0-9a-f]", part, re.IGNORECASE) for part in nibbles):
                 source = "".join(reversed(nibbles)).lower()
                 if len(source) == 32:
-                    address = ipaddress.IPv6Address(int(source, 16))
-                    mapped = ipaddress.IPv6Address(self.ip6(str(address))).exploded.replace(":", "")
+                    mapped = ipaddress.IPv6Address(self.ip6(str(ipaddress.IPv6Address(int(source, 16))))).exploded.replace(":", "")
                 else:
-                    size = max(1, (len(source) + 1) // 2)
-                    tail = self.oracle.bytes("ip6-prefix", source, size).hex()
-                    prefix = "20010db8"
-                    if source.startswith(("fc", "fd")):
-                        prefix = "fd"
-                    elif len(source) >= 3 and 0xFE8 <= int(source[:3], 16) <= 0xFEB:
-                        prefix = "fe8"
-                    elif len(source) >= 3 and 0xFEC <= int(source[:3], 16) <= 0xFEF:
-                        prefix = "fec"
-                    elif source.startswith("ff"):
-                        prefix = source[: min(4, len(source))]
-                    mapped = (prefix + tail)[:len(source)]
-                    if mapped == source:
-                        mapped = mapped[:-1] + format((int(mapped[-1], 16) + 1) % 16, "x")
+                    mapped = self.ip6_nibbles(source)
                 return list(reversed(mapped)) + labels[-2:]
         return [self.label(label) for label in labels[:-2]] + labels[-2:]
 
@@ -327,29 +313,34 @@ class Mapper:
             return value
         if address.ipv4_mapped:
             return "::ffff:" + self.ip4(str(address.ipv4_mapped))
-        if address.is_link_local:
-            network = ipaddress.IPv6Network("fe80::/10")
-            category = "link-local"
-        elif address in ipaddress.IPv6Network("fc00::/7"):
-            network = ipaddress.IPv6Network("fd00::/8")
-            category = "ula"
-        elif address in ipaddress.IPv6Network("fec0::/10"):
-            network = ipaddress.IPv6Network("fec0::/10")
-            category = "site-local"
-        elif address.is_multicast:
-            network = ipaddress.IPv6Network(f"{address.exploded[:4]}::/16")
-            category = "multicast"
-        else:
-            network = ipaddress.IPv6Network("2001:db8::/32")
-            category = "global"
-        host_bits = 128 - network.prefixlen
-        random = int.from_bytes(self.oracle.bytes(f"ip6/{category}", address.exploded, 16), "big")
-        host_mask = (1 << host_bits) - 1
-        mapped = ipaddress.IPv6Address(int(network.network_address) | (random & host_mask))
+        source = address.exploded.replace(":", "")
+        mapped = ipaddress.IPv6Address(int(self.ip6_nibbles(source), 16))
         if mapped == address:
-            mapped = ipaddress.IPv6Address(int(network.network_address) | ((int(mapped) + 1) & host_mask))
+            mapped = ipaddress.IPv6Address(int(mapped) ^ 1)
         self.seen["ip6"] += 1
         return mapped.compressed
+
+    def ip6_nibbles(self, source):
+        # Each output nibble depends only on the source nibbles before it, so a
+        # reverse zone maps to the prefix of every address inside it.
+        if source.startswith(("fc", "fd")):
+            category, kept = "ula", "fd"
+        elif source.startswith("ff"):
+            category, kept = "multicast", source[:4]
+        elif len(source) >= 3 and 0xFE8 <= int(source[:3], 16) <= 0xFEB:
+            category, kept = "link-local", "fe8"
+        elif len(source) >= 3 and 0xFEC <= int(source[:3], 16) <= 0xFEF:
+            category, kept = "site-local", "fec"
+        else:
+            category, kept = "global", "20010db8"
+        out = []
+        for index, nibble in enumerate(source):
+            if index < len(kept):
+                out.append(kept[index])
+                continue
+            offset = self.oracle.integer(f"ip6/{category}", source[:index], 0, 15)
+            out.append(format((int(nibble, 16) + offset) % 16, "x"))
+        return "".join(out)
 
     def ip6_field(self, value):
         if not value:
@@ -928,13 +919,17 @@ def validate_alter(statement, sequence, known_columns=KNOWN_COLUMNS):
         constraint = pattern.fullmatch(clause.strip())
         if not constraint:
             raise InputError(f"unsupported ALTER TABLE form for {table}")
-        local = [name.lower() for name in re.findall(r"`([a-z0-9_]+)`", constraint.group(1), re.IGNORECASE)]
         target = constraint.group(2).lower()
-        remote = [name.lower() for name in re.findall(r"`([a-z0-9_]+)`", constraint.group(3), re.IGNORECASE)]
-        if target not in known_columns or any(name not in known_columns[table] for name in local) or any(name not in known_columns[target] for name in remote):
+        if target not in known_columns:
+            raise InputError(f"unknown foreign key reference in {table}")
+        local = index_columns(constraint.group(1), table, known_columns)
+        remote = index_columns(constraint.group(3), target, known_columns)
+        if len(local) != len(remote):
             raise InputError(f"unknown foreign key reference in {table}")
         name = f"fk_{table}_{sequence + offset + 1}"
-        output.append(f"ADD CONSTRAINT `{name}` FOREIGN KEY ({constraint.group(1).strip()}) REFERENCES `{target}` ({constraint.group(3).strip()}){constraint.group(4)}")
+        columns = ", ".join(f"`{column}`" for column in local)
+        references = ", ".join(f"`{column}`" for column in remote)
+        output.append(f"ADD CONSTRAINT `{name}` FOREIGN KEY ({columns}) REFERENCES `{target}` ({references}){constraint.group(4)}")
     return f"ALTER TABLE `{table}`\n  " + ",\n  ".join(output)
 
 
