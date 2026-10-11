@@ -179,7 +179,7 @@ class HookEndToEndTests(unittest.TestCase):
 
 class CopyrightYearTests(unittest.TestCase):
     def setUp(self):
-        self.year = check.datetime.now(tz=check.timezone.utc).year
+        self.year = check.datetime.now(tz=check.UTC).year
 
     def test_stale_year_fails(self):
         problems = check.check_diff(diff("sql/x.sql", f"# Copyright 2004-{self.year - 1} Someone", start=1))
