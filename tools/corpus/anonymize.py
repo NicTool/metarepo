@@ -1147,8 +1147,14 @@ def _change(row, columns, name, function):
 SAFE_LITERAL = re.compile(r"(?:|[+-]?\d+(?:\.\d+)?|\d{4}-\d\d-\d\d(?:[ T]\d\d:\d\d:\d\d)?|NULL)")
 
 
+def group_name(mapper, value):
+    if value == "NicTool":
+        return value
+    return mapper.host(value) if "." in value else mapper.label(value)
+
+
 def numeric_id_list(value):
-    if not re.fullmatch(r"\d+(?:,\d+)*", value):
+    if not re.fullmatch(r"(?:\d+(?:,\d+)*)?", value):
         raise InputError("nt_perm.usable_ns is not a numeric id list")
     return value
 
@@ -1219,7 +1225,7 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
             result[columns.index("password")] = ""
         handled.update({"pass_salt", "password"})
     elif table in {"nt_group", "nt_group_log"}:
-        change("name", lambda value: value if value == "NicTool" else (mapper.host(value) if "." in value else mapper.label(value)))
+        change("name", lambda value: group_name(mapper, value))
         if table == "nt_group_log":
             change("action", lambda value: static_string(table, "action", value))
     elif table in {"nt_nameserver", "nt_nameserver_log"}:
@@ -1250,7 +1256,7 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
             if not re.fullmatch(r"\d+", option_value):
                 raise InputError("session_timeout is not numeric")
         elif option_name == "default_group":
-            result[columns.index("option_value")] = option_value if option_value == "NicTool" else mapper.label(option_value)
+            result[columns.index("option_value")] = group_name(mapper, option_value)
         else:
             result[columns.index("option_name")] = mapper.words(option_name, people)
             result[columns.index("option_value")] = mapper.words(option_value, people)

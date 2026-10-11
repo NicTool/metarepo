@@ -492,6 +492,27 @@ class DumpContractTests(unittest.TestCase):
 
         self.assertIn("'hostmaster'", output)
 
+    def test_default_group_option_names_the_mapped_group(self):
+        sql = "\n".join(
+            (
+                create_table("nt_group"),
+                "INSERT INTO `nt_group` VALUES " + row_for("nt_group", nt_group_id=anonymize.Raw("2"), name="customer.com") + ";",
+                create_table("nt_options"),
+                "INSERT INTO `nt_options` VALUES " + row_for("nt_options", option_id=anonymize.Raw("2"), option_name="default_group", option_value="customer.com") + ";",
+            )
+        )
+
+        output, _ = anonymize.anonymize_sql(sql + "\n", SECRET, require_complete=False)
+
+        mapped = anonymize.group_name(anonymize.Mapper(SECRET), "customer.com")
+        self.assertEqual(2, output.count(f"'{mapped}'"))
+        self.assertNotIn("customer", output)
+
+    def test_empty_usable_nameserver_list_is_kept(self):
+        self.assertEqual("", anonymize.numeric_id_list(""))
+        with self.assertRaises(anonymize.InputError):
+            anonymize.numeric_id_list("1,,2")
+
     def test_zones_that_map_to_one_name_stop_the_run(self):
         zones = ",".join(
             row_for("nt_zone", nt_zone_id=anonymize.Raw(str(index)), zone=zone)
