@@ -139,6 +139,12 @@ class MapperTests(unittest.TestCase):
             for first in range(1, 9):
                 self.mapper.ip4_prefix(f"{first}.1", 2)
 
+    def test_hex_that_is_not_ip6_is_scrubbed(self):
+        mapped = self.mapper.txt("device de:ad:be:ef:12:34 online", {})
+
+        self.assertNotIn("de:ad:be:ef:12:34", mapped)
+        self.assertRegex(mapped, r"([0-9a-f]{2}:){5}[0-9a-f]{2}")
+
     def test_opaque_underscore_label_is_replaced(self):
         source = "_93eb26a4e9cb12d915d090befff63c6c"
         mapped = self.mapper.label(source)
@@ -512,6 +518,16 @@ class DumpContractTests(unittest.TestCase):
         self.assertEqual("", anonymize.numeric_id_list(""))
         with self.assertRaises(anonymize.InputError):
             anonymize.numeric_id_list("1,,2")
+
+    def test_sshfp_fingerprint_stays_hex(self):
+        fingerprint = "0123456789abcdef0123456789abcdef01234567"
+        record = row_for("nt_zone_record", nt_zone_record_id=anonymize.Raw("1"), nt_zone_id=anonymize.Raw("1"), name="host", type_id=anonymize.Raw("44"), address=fingerprint)
+        sql = create_table("nt_zone_record") + "\nINSERT INTO `nt_zone_record` VALUES " + record + ";\n"
+
+        output, _ = anonymize.anonymize_sql(sql, SECRET, require_complete=False)
+
+        self.assertNotIn(fingerprint, output)
+        self.assertRegex(output, r"'[0-9a-f]{40}'")
 
     def test_zones_that_map_to_one_name_stop_the_run(self):
         zones = ",".join(

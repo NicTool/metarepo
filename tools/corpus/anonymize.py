@@ -362,6 +362,24 @@ class Mapper:
             out.append(format((int(nibble, 16) + offset) % 16, "x"))
         return "".join(out)
 
+    def _ip6_or_hex(self, value):
+        try:
+            ipaddress.IPv6Address(value)
+        except ValueError:
+            return self.hex_shape(value)
+        return self.ip6(value)
+
+    def hex_shape(self, value):
+        digits = self.oracle.bytes("hex", value.casefold(), len(value)).hex()
+        out = []
+        for index, char in enumerate(value):
+            if char.lower() in "0123456789abcdef":
+                digit = digits[index] if digits[index] != char.lower() else format((int(digits[index], 16) + 1) % 16, "x")
+                out.append(digit.upper() if char.isupper() else digit)
+            else:
+                out.append(char)
+        return "".join(out)
+
     def ip6_field(self, value):
         if not value:
             return value
@@ -460,7 +478,7 @@ class Mapper:
 
     def _protect_known(self, value, people, saved):
         value = self._protect(value, self.EMAIL_RE, lambda match: self.email(match.group(0)), saved)
-        value = self._protect(value, self.IP6_RE, lambda match: self.ip6(match.group(0)), saved)
+        value = self._protect(value, self.IP6_RE, lambda match: self._ip6_or_hex(match.group(0)), saved)
         value = self._protect(value, self.IP4_RE, self._mapped_fragment, saved)
         value = self._protect(value, self.HOST_RE, lambda match: self.host(match.group(0)), saved)
         for source, replacement in people:
@@ -1208,6 +1226,8 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
             change("address", mapper.loc)
         elif record_type in HOST_TYPES:
             change("address", lambda value: mapper.record_host(value, zone))
+        elif record_type == "44" and re.fullmatch(r"[0-9a-fA-F]+", result[columns.index("address")] or ""):
+            change("address", mapper.hex_shape)
         else:
             change("address", lambda value: mapper.txt(value, people))
         for name in ("description", "location"):

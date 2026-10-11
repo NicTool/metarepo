@@ -356,6 +356,7 @@ def _source_candidates(table, column, value, record_type=""):
         try:
             address = ipaddress.IPv6Address(match.group(0))
         except ValueError:
+            add("token", match.group(0), len(match.group(0)) >= 8)
             continue
         if address not in {ipaddress.IPv6Address("::"), ipaddress.IPv6Address("::1")}:
             add("ipv6", match.group(0), True)

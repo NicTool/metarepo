@@ -87,6 +87,11 @@ class AuditTests(unittest.TestCase):
 
             self.assertIn("source_value_retained", report["failures"])
 
+    def test_hex_text_that_is_not_ip6_is_a_source_candidate(self):
+        candidates = audit._source_candidates("nt_nameserver_export_log", "message", "device de:ad:be:ef:12:34 online")
+
+        self.assertIn("de:ad:be:ef:12:34", {candidate for _, candidate, _ in candidates})
+
     def test_private_source_comparison_requires_the_manifest_source(self):
         with tempfile.TemporaryDirectory() as directory:
             corpus, manifest_path = self.make_artifact(directory)
