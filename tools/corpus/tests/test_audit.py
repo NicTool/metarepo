@@ -2,7 +2,9 @@
 
 import base64
 import collections
+import gzip
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +12,7 @@ from pathlib import Path
 import anonymize
 import audit
 
-from tests.test_anonymize import SECRET, complete_dump
+from tests.test_anonymize import SECRET, complete_dump, row_for
 
 
 class AuditTests(unittest.TestCase):
@@ -43,6 +45,28 @@ class AuditTests(unittest.TestCase):
             self.assertEqual("provided", report["source_input"])
             self.assertGreater(report["counts"]["source_candidates"], 0)
             self.assertEqual(0, report["counts"]["source_global_matches"])
+
+    def test_private_source_comparison_finds_a_retained_address(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "source.sql")
+            record = row_for("nt_zone_record", nt_zone_record_id=anonymize.Raw("1"), nt_zone_id=anonymize.Raw("1"), name="www", type_id=anonymize.Raw("1"), address="10.20.30.40")
+            source.write_text(complete_dump() + "INSERT INTO `nt_zone_record` VALUES " + record + ";\n", encoding="utf8")
+            source.chmod(0o600)
+            corpus = Path(directory, "corpus.sql.gz")
+            anonymize.run(str(source), str(corpus), SECRET, "fixture")
+            manifest = json.loads(Path(directory, "corpus.manifest.json").read_text())
+            mapped = gzip.decompress(corpus.read_bytes()).decode()
+            tampered = re.sub(r"'10\.\d+\.\d+\.\d+'", "'10.20.30.40'", mapped)
+            self.assertNotEqual(mapped, tampered)
+
+            reports = []
+            for text in (mapped, tampered):
+                report = {"counts": collections.Counter(), "failures": {}, "status": "PASS"}
+                audit._compare_source(report, source.read_text(), text, manifest)
+                reports.append(report)
+
+            self.assertNotIn("source_value_retained", reports[0]["failures"])
+            self.assertIn("source_value_retained", reports[1]["failures"])
 
     def test_private_source_comparison_requires_the_manifest_source(self):
         with tempfile.TemporaryDirectory() as directory:

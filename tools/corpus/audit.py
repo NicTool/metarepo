@@ -329,7 +329,10 @@ def _source_candidates(table, column, value, record_type=""):
     txt_field = table in {"nt_zone_record", "nt_zone_record_log"} and column == "address" and record_type in TXT_TYPES
     record_other = table in {"nt_zone_record", "nt_zone_record_log"} and column == "other" and not re.fullmatch(r"[\d\s]*", value)
     host_field = field in HOST_FIELDS or (table in {"nt_zone_record", "nt_zone_record_log"} and column == "address" and record_type in HOST_TYPES)
-    mapped_field = field in PERSONAL_FIELDS or field in WORDS_FIELDS or host_field or txt_field or record_other or table in DROP_ROWS
+    address_field = field in {("nt_nameserver", "address"), ("nt_nameserver", "address6"), ("nt_nameserver_log", "address"), ("nt_nameserver_log", "address6")} or (
+        table in {"nt_zone_record", "nt_zone_record_log"} and column == "address" and record_type in {"1", "28"}
+    )
+    mapped_field = field in PERSONAL_FIELDS or field in WORDS_FIELDS or host_field or txt_field or record_other or address_field or table in DROP_ROWS
     if not mapped_field:
         return set()
     candidates = set()
