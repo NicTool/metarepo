@@ -127,6 +127,9 @@ class Mapper:
         self.seen = Counter()
         self.labels = {}
         self.label_owners = {}
+        self.usernames = {}
+        self.username_owners = {}
+        self.zones = {}
 
     def label(self, value):
         low = value.lower()
@@ -181,10 +184,24 @@ class Mapper:
                     labels = leading_ip.group(2)[1:].split(".")
                     lowered = [label.lower() for label in labels]
             mapped = mapped_prefix + [self.label(label) for label in labels]
-            if len(labels) > 1:
-                mapped.append(self.oracle.pick("tld", lowered[-1], FAKE_TLDS))
+            mapped.append(self.oracle.pick("tld", lowered[-1], FAKE_TLDS))
         self.seen["hosts"] += 1
         return ".".join(mapped) + ("." if trailing_dot else "")
+
+    def record_host(self, value, zone):
+        # NicTool qualifies a name by appending its zone unless it ends in a dot or already ends with the zone.
+        if not value or value in {"@", "*"}:
+            return value
+        if value.endswith(".") or not zone:
+            return self.host(value) if "." in value or value.endswith(".") else self.label(value)
+        zone = zone.rstrip(".")
+        if value.lower().endswith(zone.lower()):
+            return self.host(value)
+        mapped_zone = self.host(zone + ".")
+        mapped = self.host(f"{value}.{zone}.")
+        if mapped.endswith("." + mapped_zone):
+            return mapped[: -len(mapped_zone) - 1]
+        return ".".join(self.label(label) for label in value.split("."))
 
     def reverse(self, labels):
         if labels[-2].lower() == "in-addr":
@@ -365,10 +382,24 @@ class Mapper:
             for suffix in ("", "1", "2", "7", "42", "99")
             if (first + suffix).casefold() != value.casefold() and (first + suffix).casefold() not in self.reserved
         )
-        if not choices:
-            return self.label(value)
-        mapped = self.oracle.pick("username", value.casefold(), choices)
-        return mapped if mapped.casefold() != value.casefold() and mapped.casefold() not in self.reserved else choices[0]
+        key = value.casefold()
+        if key in self.usernames:
+            return self.usernames[key]
+        mapped = None
+        for attempt in range(64):
+            seed = key if attempt == 0 else f"{key}:{attempt}"
+            candidate = self.oracle.pick("username", seed, choices) if choices else self.label(value)
+            if attempt >= 8:
+                candidate += str(self.oracle.integer("username-suffix", seed, 100, 9999))
+            folded = candidate.casefold()
+            if folded != key and folded not in self.reserved and folded not in self.username_owners and folded not in {"root", "nictest"}:
+                mapped = candidate
+                break
+        if mapped is None:
+            raise InputError("could not generate a distinct username")
+        self.usernames[key] = mapped
+        self.username_owners[mapped.casefold()] = key
+        return mapped
 
     def email(self, value):
         if not value or "@" not in value:
@@ -788,6 +819,7 @@ def _split_top_level(value):
     return parts
 
 
+SAFE_DDL_LITERAL_RE = re.compile(r"-?[0-9]{1,4}(?:\.[0-9]{1,4})?|[0-9]{4}-[0-9]{2}-[0-9]{2}(?: [0-9]{2}:[0-9]{2}:[0-9]{2})?|")
 DDL_LITERAL = r"'(?:\\.|''|[^'\\])*'"
 DDL_CHARSET = r"(?:latin1|utf8|utf8mb3|utf8mb4)"
 DDL_COLLATION = r"(?:latin1_swedish_ci|utf8_general_ci|utf8mb3_bin|utf8mb3_general_ci|utf8mb4_bin)"
@@ -826,7 +858,7 @@ def validate_create(statement, known_columns=KNOWN_COLUMNS, string_columns=STRIN
     if re.search(blocked, statement, re.IGNORECASE):
         raise InputError(f"unsupported metadata in CREATE TABLE {table}")
     for literal in re.findall(r"'((?:\\.|''|[^'])*)'", statement):
-        if not re.fullmatch(r"[0-9 .:+-]*", literal) and literal not in DDL_STRING_LITERALS.get(table, set()):
+        if not SAFE_DDL_LITERAL_RE.fullmatch(literal) and literal not in DDL_STRING_LITERALS.get(table, set()):
             raise InputError(f"non-allowlisted string literal in CREATE TABLE {table}")
     body, options = _balanced_body(statement)
     columns = []
@@ -1134,7 +1166,8 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
         if table == "nt_zone_log":
             change("action", lambda value: static_string(table, "action", value))
     elif table in {"nt_zone_record", "nt_zone_record_log"}:
-        change("name", lambda value: mapper.host(value) if "." in value else mapper.label(value))
+        zone = mapper.zones.get(str(result[columns.index("nt_zone_id")]))
+        change("name", lambda value: mapper.record_host(value, zone))
         record_type = str(result[columns.index("type_id")])
         if record_type in TXT_TYPES:
             change("address", lambda value: mapper.txt(value, people))
@@ -1145,7 +1178,7 @@ def rewrite_row(table, row, mapper, people, password, limits=None, known_columns
         elif record_type == "29":
             change("address", mapper.loc)
         elif record_type in HOST_TYPES:
-            change("address", mapper.host)
+            change("address", lambda value: mapper.record_host(value, zone))
         else:
             change("address", lambda value: mapper.txt(value, people))
         for name in ("description", "location"):
@@ -1251,6 +1284,18 @@ def source_reservations(items, known_columns=KNOWN_COLUMNS):
     return reserved
 
 
+def discover_zones(items, mapper, known_columns=KNOWN_COLUMNS):
+    for table in ("nt_zone", "nt_zone_log"):
+        columns = known_columns[table]
+        for kind, item_table, payload in items:
+            if kind != "insert" or item_table != table:
+                continue
+            for row in payload:
+                values = dict(zip(columns, row))
+                if not isinstance(values["zone"], Raw):
+                    mapper.zones.setdefault(str(values["nt_zone_id"]), values["zone"])
+
+
 def discover_people(items, mapper, known_columns=KNOWN_COLUMNS):
     people = {}
     for kind, table, payload in items:
@@ -1318,6 +1363,7 @@ def anonymize_sql(
     kept_history, retention_dropped = retention_plan(items, known_columns, retention_profile)
     mapper = Mapper(secret, source_reservations(items, known_columns))
     people = discover_people(items, mapper, known_columns)
+    discover_zones(items, mapper, known_columns)
     limits = column_limits(items)
     output = ["SET NAMES utf8mb4;", "SET FOREIGN_KEY_CHECKS=0;"]
     counts = Counter()

@@ -85,6 +85,29 @@ class MapperTests(unittest.TestCase):
     def setUp(self):
         self.mapper = anonymize.Mapper("fixture secret with more than thirty two bytes")
 
+    def test_distinct_usernames_stay_distinct(self):
+        sources = [f"private-user-{index}" for index in range(500)]
+        mapped = [self.mapper.username(source) for source in sources]
+
+        self.assertEqual(len({name.casefold() for name in mapped}), len(sources))
+        self.assertNotEqual(self.mapper.username("private-user-10"), self.mapper.username("private-user-14"))
+        self.assertEqual(mapped[3], self.mapper.username("PRIVATE-USER-3"))
+        self.assertNotIn("root", {name.casefold() for name in mapped})
+
+    def test_relative_names_follow_their_zone(self):
+        zone = self.mapper.host("example.com")
+        self.assertEqual(self.mapper.record_host("foo.bar", "example.com") + "." + zone + ".", self.mapper.host("foo.bar.example.com."))
+        self.assertEqual(self.mapper.record_host("www", "example.com") + "." + zone, self.mapper.host("www.example.com"))
+        self.assertEqual(self.mapper.record_host("www.example.com", "example.com"), self.mapper.host("www.example.com"))
+        self.assertEqual(self.mapper.record_host("other.net.", "example.com"), self.mapper.host("other.net."))
+        for value in ("@", "*", ""):
+            self.assertEqual(value, self.mapper.record_host(value, "example.com"))
+
+    def test_single_label_zone_is_the_suffix_of_its_names(self):
+        zone = self.mapper.host("lan")
+        self.assertTrue(self.mapper.host("printer.lan.").endswith("." + zone + "."))
+        self.assertEqual(self.mapper.record_host("printer", "lan") + "." + zone + ".", self.mapper.host("printer.lan."))
+
     def test_opaque_underscore_label_is_replaced(self):
         source = "_93eb26a4e9cb12d915d090befff63c6c"
         mapped = self.mapper.label(source)
@@ -372,6 +395,11 @@ class DumpContractTests(unittest.TestCase):
         unsafe = create_table("nt_group").replace("LONGTEXT NULL", "LONGTEXT DEFAULT 'customer-name'", 1)
         with self.assertRaisesRegex(anonymize.InputError, "non-allowlisted string literal"):
             anonymize.anonymize_sql(unsafe, SECRET, require_complete=False)
+
+        for value in ("203.0.113.17", "+1 555 0100", "2001:db8::1", "5550100"):
+            unsafe = create_table("nt_group").replace("LONGTEXT NULL", f"LONGTEXT DEFAULT '{value}'", 1)
+            with self.assertRaisesRegex(anonymize.InputError, "non-allowlisted string literal"):
+                anonymize.anonymize_sql(unsafe, SECRET, require_complete=False)
 
         unknown_option = create_table("nt_group", suffix="ENGINE=InnoDB STORAGE DISK")
         with self.assertRaisesRegex(anonymize.InputError, "unsupported table options"):
