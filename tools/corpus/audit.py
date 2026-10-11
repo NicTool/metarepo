@@ -323,9 +323,11 @@ def _source_host_is_sensitive(value):
 
 
 def _source_candidates(table, column, value, record_type=""):
-    if not value or table in STATIC_ROWS or value in ROW_STRING_LITERALS.get((table, column), set()) or anonymize.SAFE_LITERAL.fullmatch(value):
-        return set()
     field = (table, column)
+    if not value or table in STATIC_ROWS or value in ROW_STRING_LITERALS.get(field, set()):
+        return set()
+    if anonymize.SAFE_LITERAL.fullmatch(value) and field not in PERSONAL_FIELDS:
+        return set()
     txt_field = table in {"nt_zone_record", "nt_zone_record_log"} and column == "address" and record_type in TXT_TYPES
     record_other = table in {"nt_zone_record", "nt_zone_record_log"} and column == "other" and not re.fullmatch(r"[\d\s]*", value)
     host_field = field in HOST_FIELDS or (table in {"nt_zone_record", "nt_zone_record_log"} and column == "address" and record_type in HOST_TYPES)

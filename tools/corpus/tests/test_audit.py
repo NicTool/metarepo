@@ -68,6 +68,25 @@ class AuditTests(unittest.TestCase):
             self.assertNotIn("source_value_retained", reports[0]["failures"])
             self.assertIn("source_value_retained", reports[1]["failures"])
 
+    def test_email_without_a_domain_is_replaced_and_audited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "source.sql")
+            source.write_text(complete_dump().replace("real.user@private.invalid", "441234567890"), encoding="utf8")
+            source.chmod(0o600)
+            corpus = Path(directory, "corpus.sql.gz")
+            anonymize.run(str(source), str(corpus), SECRET, "fixture")
+            manifest = json.loads(Path(directory, "corpus.manifest.json").read_text())
+            mapped = gzip.decompress(corpus.read_bytes()).decode()
+            self.assertNotIn("441234567890", mapped)
+
+            mapped_email = anonymize.Mapper(SECRET).username("441234567890")
+            tampered = mapped.replace(f"'{mapped_email}'", "'441234567890'")
+            self.assertNotEqual(mapped, tampered)
+            report = {"counts": collections.Counter(), "failures": {}, "status": "PASS"}
+            audit._compare_source(report, source.read_text(), tampered, manifest)
+
+            self.assertIn("source_value_retained", report["failures"])
+
     def test_private_source_comparison_requires_the_manifest_source(self):
         with tempfile.TemporaryDirectory() as directory:
             corpus, manifest_path = self.make_artifact(directory)

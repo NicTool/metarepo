@@ -413,8 +413,10 @@ class Mapper:
         return mapped
 
     def email(self, value):
-        if not value or "@" not in value:
+        if not value:
             return value
+        if "@" not in value:
+            return self.username(value)
         local, domain = value.rsplit("@", 1)
         mapped_domain = self.host(domain)
         if "." not in mapped_domain.rstrip("."):
