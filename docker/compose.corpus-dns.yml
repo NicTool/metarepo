@@ -1,0 +1,13 @@
+# Copyright (c) 2026, The NicTool Contributors
+
+services:
+  corpus-dns:
+    image: node:22-slim
+    network_mode: none
+    read_only: true
+    volumes:
+      - ${NICTOOL_CORPUS_TOOLS}:/work/corpus:ro
+      - ${NICTOOL_DNS_RESOURCE_RECORD_SOURCE}:/work/node_modules/@nictool/dns-resource-record:ro
+      - ${NICTOOL_DNS_ZONE_SOURCE}:/work/node_modules/@nictool/dns-zone:ro
+      - ${NICTOOL_CORPUS_INPUT_DIR}:/input:ro
+    command: [node, /work/corpus/dns-check.mjs, /input/dns.json]

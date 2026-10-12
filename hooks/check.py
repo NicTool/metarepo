@@ -227,7 +227,9 @@ def check_diff(diff: str) -> list[str]:
             if len(run) > COMMENT_LINES_MAX and start > 2:
                 problems.append(f"{path}:{start}: {len(run)}-line comment; "
                                 "one line plus a link (brevity is the default)")
-            for gram, lineno in ngrams(run).items():
+            prose = [(lineno, text) for lineno, text in run
+                     if not (lineno <= COPYRIGHT_HEAD and text.lower().startswith("copyright "))]
+            for gram, lineno in ngrams(prose).items():
                 other = code_grams.get(gram)
                 if other is not None and abs(other - lineno) <= NEAR:
                     problems.append(f"{path}:{lineno}: comment repeats line {other}: "

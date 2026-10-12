@@ -1,0 +1,37 @@
+# Copyright (c) 2026, The NicTool Contributors
+
+services:
+  db:
+    volumes:
+      - db-data:/var/lib/mysql
+      - ${NICTOOL_API_SOURCE}/sql:/sql:ro
+      - ${NICTOOL_API_SOURCE}/sql/init-mysql.sh:/docker-entrypoint-initdb.d/init-mysql.sh:ro
+
+  api:
+    build:
+      context: ${NICTOOL_API_SOURCE}
+    volumes:
+      - ${NICTOOL_API_SOURCE}:/app
+      - api_node_modules:/app/node_modules
+      - ${NICTOOL_VALIDATE_SOURCE}:/app/node_modules/@nictool/validate
+      - ${NICTOOL_DNS_RESOURCE_RECORD_SOURCE}:/app/node_modules/@nictool/dns-resource-record
+
+  root-user-init:
+    volumes:
+      - ${NICTOOL_API_SOURCE}:/app
+      - api_node_modules:/app/node_modules
+      - ${NICTOOL_VALIDATE_SOURCE}:/app/node_modules/@nictool/validate
+
+  nictool-legacy:
+    build:
+      context: ${NICTOOL_LEGACY_SOURCE}
+    volumes:
+      - ${NICTOOL_LEGACY_SOURCE}/server:/usr/local/nictool/server
+      - ${NICTOOL_LEGACY_SOURCE}/client:/usr/local/nictool/client
+      - ${NICTOOL_LEGACY_SOURCE}/dist:/usr/local/nictool/dist:ro
+      - ${NICTOOL_CORPUS_CFG_DIR}/test.cfg:/usr/local/nictool/server/t/test.cfg
+      - ${NICTOOL_CORPUS_CFG_DIR}/test-rest.cfg:/usr/local/nictool/server/t/test-rest.cfg
+      - ${NICTOOL_CORPUS_CFG_DIR}/api-test.cfg:/usr/local/nictool/server/api/t/test.cfg
+    environment:
+      NICTOOL_DB_NAME: ${NICTOOL_DB_NAME:-nictool_corpus}
+      NICTOOL_TEST_ENV: "1"

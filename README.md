@@ -190,6 +190,13 @@ standalone container leaves it disabled unless requested.
 
 ## Local development
 
+Corpus tooling lives in [tools/corpus](tools/corpus/README.md). `make test-corpus`
+runs its privacy regressions and containerized DNS-library checks. Use
+`make test-corpus-dns CORPUS=...` for corpus records and
+`make test-corpus-integration CORPUS=...` for isolated restore and upgrade tests.
+SQL files stay local until reviewed for release assets. Only tools, manifests
+and synthetic fixtures belong in git.
+
 The compose file bind-mounts source directories into each container, so code changes on your host are reflected immediately without rebuilding. Just restart the affected service:
 
 ```sh

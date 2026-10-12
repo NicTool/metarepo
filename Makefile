@@ -95,12 +95,26 @@ test-server: ## Run server tests (requires make up-ui)
 	docker compose --env-file docker/.env --profile ui exec -T server npm test
 
 test-libs: ## Run library tests (no running services needed)
-	@for lib in validate dns-zone dns-resource-record; do \
+	@suite_result=0; for lib in validate dns-zone dns-resource-record; do \
 		echo "==> libs/$$lib"; \
-		( $(call node_suite,docker run --rm $(LIB_TEST_MOUNTS) -w /libs/$$lib node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test") ) || exit 1; \
-	done
-	@echo "==> libs/dns-nameserver"
-	@$(call node_suite_warn_skips,docker run --rm $(LIB_TEST_MOUNTS) -w /libs/dns-nameserver node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test")
+		( $(call node_suite,docker run --rm $(LIB_TEST_MOUNTS) -w /libs/$$lib node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test") ) || suite_result=1; \
+	done; \
+	echo "==> libs/dns-nameserver"; \
+	( $(call node_suite_warn_skips,docker run --rm $(LIB_TEST_MOUNTS) -w /libs/dns-nameserver node:22-slim sh -c "npm install --ignore-scripts 2>&1 | tail -1 && npm test") ) || suite_result=1; \
+	exit $$suite_result
+
+.PHONY: test-corpus test-corpus-dns test-corpus-integration
+test-corpus: ## Test corpus privacy rules and the JavaScript DNS adapter
+	cd tools/corpus && uv run python -B -m unittest discover -s tests -v
+	bash tools/corpus/scripts/dns-check.sh --test
+
+test-corpus-dns: ## Check CORPUS with the DNS libraries (optional SOURCE for private comparison)
+	@test -n "$(CORPUS)" || { echo 'set CORPUS to a local .sql.gz file' >&2; exit 2; }
+	bash tools/corpus/scripts/dns-check.sh "$(CORPUS)" $(if $(SOURCE),"$(SOURCE)")
+
+test-corpus-integration: ## Restore CORPUS and run isolated upgrades and application suites
+	@test -n "$(CORPUS)" || { echo 'set CORPUS to a local .sql.gz file' >&2; exit 2; }
+	bash tools/corpus/scripts/integration-test.sh $(if $(SOURCE),--source "$(SOURCE)") "$(CORPUS)" "$(CURDIR)"
 
 test-v2-unit: ## Run NicTool v2 unit tests with SOAP defaults (requires up-legacy)
 	$(V2_EXEC) $(V2_SOAP_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && perl Makefile.PL && make test'
