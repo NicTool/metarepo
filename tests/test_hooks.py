@@ -72,7 +72,7 @@ class SayItOnceTests(unittest.TestCase):
         self.assertEqual(len(check.check_diff(diff("t/x.t", *added))), 1)
 
     def test_copyright_notice_may_match_an_output_constant(self):
-        year = check.datetime.now(tz=check.timezone.utc).year
+        year = check.datetime.now(tz=check.UTC).year
         notice = f"Copyright (c) {year}, The NicTool Contributors"
         self.assertEqual([], check.check_diff(diff("tool.py", "# " + notice, "", f'COPYRIGHT = "{notice}"', start=1)))
 
