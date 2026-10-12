@@ -205,7 +205,7 @@ class Mapper:
             return self.host(value) if "." in value or value.endswith(".") else self.label(value)
         zone = zone.rstrip(".")
         if value.lower().endswith(zone.lower()):
-            return self.host(value)
+            return self.zone(value)
         mapped_zone = self.host(zone + ".")
         mapped = self.host(f"{value}.{zone}.")
         if mapped.endswith("." + mapped_zone):
@@ -1133,8 +1133,20 @@ def retention_plan(items, known_columns=KNOWN_COLUMNS, profile="full"):
             indexes.update(matches[:1])
             indexes.update(matches[-1:])
         kept[table] = indexes
-        if len(indexes) < len(rows):
-            removed[table] = len(rows) - len(indexes)
+    global_log = "nt_user_global_log"
+    if global_log in kept:
+        columns = known_columns[global_log]
+        object_at, entry_at = columns.index("object"), columns.index("log_entry_id")
+        ids = {}
+        for index in kept[global_log]:
+            row = table_rows[global_log][index]
+            ids.setdefault(f"nt_{row[object_at]}_log", set()).add(str(row[entry_at]))
+        for table, wanted in ids.items():
+            if table in kept:
+                kept[table].update(index for index, row in enumerate(table_rows[table]) if str(row[0]) in wanted)
+    for table, rows in table_rows.items():
+        if len(kept[table]) < len(rows):
+            removed[table] = len(rows) - len(kept[table])
     return kept, removed
 
 

@@ -108,6 +108,8 @@ class MapperTests(unittest.TestCase):
         self.assertTrue(self.mapper.host("printer.lan.").endswith("." + zone + "."))
         self.assertEqual("ns1", self.mapper.host("ns1"))
         self.assertEqual(self.mapper.record_host("printer", "lan") + "." + zone + ".", self.mapper.host("printer.lan."))
+        self.assertEqual(zone, self.mapper.record_host("lan", "lan"))
+        self.assertEqual(self.mapper.host("printer.lan.")[:-1], self.mapper.record_host("printer.lan", "lan"))
 
     def test_spf_ip6_mechanisms_stay_addresses(self):
         mapped = self.mapper.txt("v=spf1 ip6:2001:4860::/32 ip4:203.0.113.5 -all", {})
@@ -658,6 +660,25 @@ class DumpContractTests(unittest.TestCase):
         self.assertEqual(3, manifest["source_rows"]["nt_group_log"])
         self.assertEqual(2, manifest["rows"]["nt_group_log"])
         self.assertEqual({"nt_group_log": 1}, manifest["retention"]["dropped_rows"])
+
+    def test_historical_retention_keeps_log_rows_the_global_log_references(self):
+        user_logs = [row_for("nt_user_log", nt_user_log_id=anonymize.Raw(str(index)), action="modified", timestamp=anonymize.Raw(str(index))) for index in (2, 3, 4)]
+        global_log = row_for("nt_user_global_log", nt_user_global_log_id=anonymize.Raw("1"), action="modified", object="user", target="user", log_entry_id=anonymize.Raw("3"))
+        sql = "\n".join(
+            (
+                create_table("nt_user_log"),
+                create_table("nt_user_global_log"),
+                f"INSERT INTO `nt_user_log` VALUES {','.join(user_logs)};",
+                f"INSERT INTO `nt_user_global_log` VALUES {global_log};",
+            )
+        )
+
+        output, manifest = anonymize.anonymize_sql(sql, SECRET, require_complete=False, retention_profile="historical-patterns")
+        items = anonymize.parse_dump(output, require_complete=False)
+        retained = [str(row[0]) for kind, table, payload in items if kind == "insert" and table == "nt_user_log" for row in payload]
+
+        self.assertEqual(["2", "3", "4"], retained)
+        self.assertNotIn("nt_user_log", manifest["retention"]["dropped_rows"])
 
     def test_historical_retention_distinguishes_unusual_text_shapes(self):
         columns = KNOWN_COLUMNS["nt_group_log"]
