@@ -445,6 +445,21 @@ class DumpContractTests(unittest.TestCase):
         with self.assertRaisesRegex(anonymize.InputError, "unsupported table options"):
             anonymize.anonymize_sql(unknown_option, SECRET, require_complete=False)
 
+    def test_mysql_57_utf8_bin_collation_is_accepted(self):
+        table = create_table("nt_group", suffix="ENGINE=MyISAM AUTO_INCREMENT=12 DEFAULT CHARSET=utf8 COLLATE=utf8_bin")
+        table = table.replace("`name` LONGTEXT", "`name` LONGTEXT COLLATE utf8_bin", 1)
+
+        output, _ = anonymize.anonymize_sql(table, SECRET, require_complete=False)
+
+        self.assertIn("COLLATE=utf8_bin", output)
+
+    def test_database_statements_from_a_databases_dump_are_dropped(self):
+        sql = "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `private_db` /*!40100 DEFAULT CHARACTER SET latin1 */;\nUSE `private_db`;\n" + create_table("nt_group")
+
+        output, _ = anonymize.anonymize_sql(sql, SECRET, require_complete=False)
+
+        self.assertNotIn("private_db", output)
+
     def test_column_type_class_must_match_the_known_schema(self):
         string_as_number = create_table("nt_group").replace("`name` LONGTEXT", "`name` BIGINT")
         number_as_string = create_table("nt_group").replace("`nt_group_id` BIGINT", "`nt_group_id` LONGTEXT")

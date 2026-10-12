@@ -611,7 +611,7 @@ TABLE_OPTIONS_RE = re.compile(
     r"\s*(?:ENGINE\s*=\s*(?:InnoDB|MyISAM)\s*)?"
     r"(?:AUTO_INCREMENT\s*=\s*\d+\s*)?"
     r"(?:(?:DEFAULT\s+)?CHARSET\s*=\s*(?:latin1|utf8|utf8mb3|utf8mb4)\s*)?"
-    r"(?:COLLATE\s*=\s*(?:latin1_swedish_ci|utf8_general_ci|utf8mb3_bin|utf8mb3_general_ci|utf8mb4_bin)\s*)?"
+    r"(?:COLLATE\s*=\s*(?:latin1_swedish_ci|utf8_bin|utf8_general_ci|utf8mb3_bin|utf8mb3_general_ci|utf8mb4_bin)\s*)?"
     r"(?:ROW_FORMAT\s*=\s*(?:COMPRESSED|DYNAMIC)\s*)?",
     re.IGNORECASE,
 )
@@ -859,7 +859,7 @@ def _split_top_level(value):
 SAFE_DDL_LITERAL_RE = re.compile(r"-?[0-9]{1,4}(?:\.[0-9]{1,4})?|[0-9]{4}-[0-9]{2}-[0-9]{2}(?: [0-9]{2}:[0-9]{2}:[0-9]{2})?|")
 DDL_LITERAL = r"'(?:\\.|''|[^'\\])*'"
 DDL_CHARSET = r"(?:latin1|utf8|utf8mb3|utf8mb4)"
-DDL_COLLATION = r"(?:latin1_swedish_ci|utf8_general_ci|utf8mb3_bin|utf8mb3_general_ci|utf8mb4_bin)"
+DDL_COLLATION = r"(?:latin1_swedish_ci|utf8_bin|utf8_general_ci|utf8mb3_bin|utf8mb3_general_ci|utf8mb4_bin)"
 COLUMN_DEFINITION_RE = re.compile(
     rf"\s*`[a-z0-9_]+`\s+[a-z]+"
     rf"(?:\(\s*(?:[0-9]+(?:\s*,\s*[0-9]+)?|{DDL_LITERAL}(?:\s*,\s*{DDL_LITERAL})*)\s*\))?"
@@ -1020,7 +1020,7 @@ def parse_dump(text, require_complete=True, known_columns=KNOWN_COLUMNS, string_
             if altered:
                 foreign_key_count += altered.upper().count("ADD CONSTRAINT")
                 items.append(("alter", None, altered))
-        elif re.fullmatch(r"ALTER\s+DATABASE\s+`[^`]+`\s+CHARACTER\s+SET\s+(?:latin1|utf8mb4)\s+COLLATE\s+[a-z0-9_]+", statement, re.IGNORECASE) or re.fullmatch(r"LOCK\s+TABLES\s+`[a-z0-9_]+`\s+WRITE", statement, re.IGNORECASE) or re.fullmatch(r"UN" r"LOCK\s+TABLES", statement, re.IGNORECASE) or re.fullmatch(r"SET\s+(?:NAMES\s+[a-z0-9_]+|(?:FOREIGN_KEY_CHECKS|UNIQUE_CHECKS|AUTOCOMMIT)\s*=\s*[01]|SQL_MODE\s*=\s*'[-A-Z_,]*')", statement, re.IGNORECASE):
+        elif re.fullmatch(r"CREATE\s+DATABASE\s+(?:/\*!\d+\s+IF\s+NOT\s+EXISTS\s*\*/\s*)?`[^`]+`(?:\s*/\*!\d+\s+DEFAULT\s+CHARACTER\s+SET\s+[a-z0-9_]+(?:\s+COLLATE\s+[a-z0-9_]+)?\s*\*/)?|USE\s+`[^`]+`", statement, re.IGNORECASE) or re.fullmatch(r"ALTER\s+DATABASE\s+`[^`]+`\s+CHARACTER\s+SET\s+(?:latin1|utf8mb4)\s+COLLATE\s+[a-z0-9_]+", statement, re.IGNORECASE) or re.fullmatch(r"LOCK\s+TABLES\s+`[a-z0-9_]+`\s+WRITE", statement, re.IGNORECASE) or re.fullmatch(r"UN" r"LOCK\s+TABLES", statement, re.IGNORECASE) or re.fullmatch(r"SET\s+(?:NAMES\s+[a-z0-9_]+|(?:FOREIGN_KEY_CHECKS|UNIQUE_CHECKS|AUTOCOMMIT)\s*=\s*[01]|SQL_MODE\s*=\s*'[-A-Z_,]*')", statement, re.IGNORECASE):
             continue
         else:
             keyword = statement.split(None, 1)[0] if statement.split() else "empty"
