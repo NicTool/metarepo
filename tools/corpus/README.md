@@ -43,7 +43,7 @@ corpus. The default keeps all history except sessions.
 
 ## Check it
 
-Compare the result with the private source before sharing it:
+Compare the result with the private source:
 
 ```sh
 python3 tools/corpus/audit.py \
@@ -56,7 +56,11 @@ python3 tools/corpus/audit.py \
 To check specific names, domains or tokens too, put one per line in a private
 mode-0600 file and pass `--indicators FILE --require-indicators`.
 Reports contain counts and field categories rather than matched private values.
-A failed audit needs investigation before the corpus is shared.
+
+The audit catches known leak shapes. It doesn't prove a corpus is anonymous.
+It skips the options table and most record types, such as HINFO, NAPTR and
+SSHFP. It also lets numbers, short values and common words through unchecked,
+and timestamps are copied as-is. So a passing audit isn't permission to share.
 
 ## Use it
 
@@ -86,24 +90,8 @@ Failed, cancelled, skipped or unavailable suites prevent a passing integration
 result. `make test-corpus` tests the corpus tools
 themselves with synthetic data.
 
-## Share it
+## Keep it local
 
-After the source audit and human review, upload the anonymized `.sql.gz` and
-its `.manifest.json` as assets on a versioned metarepo release. Include the
-reviewed audit and test reports there if they're useful. Generated dumps,
-manifests and reports belong with the release assets, not in the source tree.
-
-Never upload the raw dump, mapping secret or indicator file. Review attribution
-in the manifest too. `--contributor` accepts a public alias, not an email address.
-
-Recipients download the dump and matching manifest from the same release.
-They can check the download without access to the private source:
-
-```sh
-python3 tools/corpus/audit.py \
-  tools/corpus/corpora/nictool-2.41.sql.gz \
-  tools/corpus/corpora/nictool-2.41.manifest.json
-```
-
-Then they can run the same `make test-corpus-dns` and
-`make test-corpus-integration` commands above.
+Corpora stay on the machine that made them. Don't upload a corpus, its
+manifest or its reports anywhere, including a metarepo release. Never commit
+the raw dump, mapping secret or indicator file either.
