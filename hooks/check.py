@@ -14,7 +14,7 @@ import argparse
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 
 # The list in AGENTS.md "Word choice"; tests/test_hooks.py keeps them equal.
@@ -203,7 +203,7 @@ def ngrams(run: list[tuple[int, str]]) -> dict[tuple[str, ...], int]:
 
 def check_diff(diff: str) -> list[str]:
     problems = []
-    this_year = datetime.now(tz=timezone.utc).year
+    this_year = datetime.now(tz=UTC).year
     for path, lines in added_lines(diff).items():
         for lineno, text in lines:
             # A banner, not a string that happens to build one further down.
