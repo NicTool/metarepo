@@ -24,6 +24,7 @@ mani.yaml, so the committed manifest carries no usernames.
 """
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -501,6 +502,30 @@ def cmd_train(projects: list[Project], name: str | None) -> None:
         assemble_train(p)
 
 
+def resolve_train_merge(p: Project, number: int) -> bool:
+    resolution = ROOT / "trains" / p.name / str(number)
+    metadata = resolution.with_suffix(".json")
+    if not metadata.is_file():
+        return False
+    expected = json.loads(metadata.read_text())
+    actual = {
+        "base_tree": git(p.path, "rev-parse", "HEAD^{tree}").stdout.strip(),
+        "head": git(p.path, "rev-parse", f"{PR_REF}/{number}").stdout.strip(),
+    }
+    if actual != expected:
+        print(f"  PR #{number}: saved resolution has different inputs")
+        return False
+    patch = str(resolution.with_suffix(".patch"))
+    if git(p.path, "apply", "--check", patch, check=False).returncode:
+        return False
+    git(p.path, "apply", patch)
+    if git(p.path, "diff", "--check", check=False).returncode:
+        return False
+    git(p.path, "add", "-u")
+    git(p.path, "commit", "-q", "-m", f"train: merge PR #{number}")
+    return True
+
+
 def assemble_train(p: Project) -> None:
     """Build train/<pin> = origin/<pin> + each train PR merged in order."""
     if not p.path.is_dir():
@@ -524,6 +549,9 @@ def assemble_train(p: Project) -> None:
                     "-m", f"train: merge PR #{n}", f"{PR_REF}/{n}", check=False)
         if merge.returncode != 0:
             conflicts = git(p.path, "diff", "--name-only", "--diff-filter=U").stdout.strip()
+            if conflicts and resolve_train_merge(p, n):
+                print(f"  PR #{n}: merged with saved resolution ({state})")
+                continue
             git(p.path, "merge", "--abort", check=False)
             if conflicts:
                 sys.exit(f"  PR #{n}: CONFLICT with the train so far, in:\n"
@@ -533,6 +561,8 @@ def assemble_train(p: Project) -> None:
             sys.exit(f"  PR #{n}: git merge failed:\n"
                      f"{merge.stderr.strip() or merge.stdout.strip()}\n"
                      f"{p.name} left on {branch}")
+        if (ROOT / "trains" / p.name / f"{n}.json").is_file() and not resolve_train_merge(p, n):
+            sys.exit(f"  PR #{n}: saved resolution no longer applies; refresh it before continuing")
         print(f"  PR #{n}: merged ({state})")
     print(f"{p.name}: train assembled on {branch}; branch from here for new work")
 

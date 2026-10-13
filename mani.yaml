@@ -27,7 +27,7 @@ projects:
     tags: [v3, app]
     env:
       pin: main
-      train: 61
+      train: 70 61 68
 
   server:
     path: server
@@ -44,7 +44,7 @@ projects:
     desc: Joi schemas shared across v3
     tags: [v3, lib]
     env:
-      pin: main
+      pin: v1.0.1
 
   dns-zone:
     path: libs/dns-zone
@@ -68,7 +68,8 @@ projects:
     desc: v3 resource record types
     tags: [v3, lib]
     env:
-      pin: v1.9.0
+      pin: main
+      train: 70
 
   research:
     path: research

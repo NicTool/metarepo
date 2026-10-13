@@ -14,5 +14,8 @@ api
 NicTool
 # mani #
 
+!/trains/api/
+!/trains/NicTool/
+
 # local-only scratch (never committed)
 local/

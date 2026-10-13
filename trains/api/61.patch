@@ -1,0 +1,2161 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 725fdd2..f8c75d7 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -9,9 +9,6 @@ on:
+ permissions:
+   contents: read
+ 
+-env:
+-  NICTOOL_VALIDATE_SPEC: https://github.com/NicTool/validate/archive/0a09c61bd174cd75e5b5ec62c83e947c432be98d.tar.gz
+-
+ jobs:
+   lint:
+     uses: NicTool/.github/.github/workflows/lint.yml@main
+@@ -46,8 +43,6 @@ jobs:
+           node-version: ${{ matrix.node-version }}
+       - run: sh sql/init-mysql.sh
+       - run: npm install
+-      - name: Install proposed validate source
+-        run: npm install --no-save ${{ env.NICTOOL_VALIDATE_SPEC }}
+       - run: npm test
+ 
+   test-mac:
+@@ -68,8 +63,6 @@ jobs:
+           node-version: ${{ matrix.node-version }}
+       - run: sh sql/init-mysql.sh
+       - run: npm install
+-      - name: Install proposed validate source
+-        run: npm install --no-save ${{ env.NICTOOL_VALIDATE_SPEC }}
+       - run: npm test
+ 
+   test-docker:
+@@ -107,6 +100,4 @@ jobs:
+           node-version: ${{ matrix.node-version }}
+       - run: sh sql/init-mysql.sh
+       - run: npm install
+-      - name: Install proposed validate source
+-        run: npm install --no-save ${{ env.NICTOOL_VALIDATE_SPEC }}
+       - run: sh test/run.sh
+diff --git a/.github/workflows/coverage.yml b/.github/workflows/coverage.yml
+index 98510ff..ca0aa54 100644
+--- a/.github/workflows/coverage.yml
++++ b/.github/workflows/coverage.yml
+@@ -6,48 +6,12 @@ on:
+   push:
+     branches: [main]
+ 
+-env:
+-  NICTOOL_VALIDATE_SPEC: https://github.com/NicTool/validate/archive/0a09c61bd174cd75e5b5ec62c83e947c432be98d.tar.gz
+-
+ jobs:
+   coverage:
+-    runs-on: ubuntu-latest
++    uses: NicTool/.github/.github/workflows/coverage.yml@main
++    secrets: inherit
+     permissions:
+       contents: read
+-<<<<<<< HEAD
+     with:
+       mysql: true
+       data-stores: mysql,json
+-=======
+-    steps:
+-      - name: Start MySQL
+-        run: sudo /etc/init.d/mysql start
+-      - uses: actions/checkout@v6
+-      - uses: actions/setup-node@v6
+-        with:
+-          node-version: lts/*
+-      - run: npm install
+-      - name: Install proposed validate source
+-        run: npm install --no-save ${{ env.NICTOOL_VALIDATE_SPEC }}
+-      - name: Initialize MySQL
+-        run: sh sql/init-mysql.sh
+-      - name: Measure each store
+-        env:
+-          NODE_ENV: cov
+-        run: |
+-          for store in json mysql; do
+-            NICTOOL_DATA_STORE=$store npm run test:coverage:lcov
+-            cp coverage/lcov.info coverage/lcov-$store.info
+-          done
+-      - name: codecov
+-        uses: codecov/codecov-action@v5
+-        with:
+-          token: ${{ secrets.CODECOV_TOKEN }}
+-          files: ./coverage/lcov-json.info,./coverage/lcov-mysql.info
+-          disable_search: true
+-          fail_ci_if_error: true
+-      - name: Coveralls
+-        uses: coverallsapp/github-action@master
+-        with:
+-          github-token: ${{ secrets.github_token }}
+->>>>>>> refs/nt/pr/61
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 184452c..ad86d81 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -6,12 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
+ 
+ ### Unreleased
+ 
+-<<<<<<< HEAD
+ - fix: reject create conflicts and duplicate permission targets
+ - create: allocate ids internally and reject caller-supplied ids
+ - fix(sql): seed ns export types coredns & native for 2.x upgrade
+-- fix: server stop waits for the stores to disconnect
+-=======
+ - audit: enforce route-specific queries and file-store exact matching
+ - session: validate qualified usernames and permission responses
+ - user: add subgroup group-name sorting and reject unknown writes
+@@ -19,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
+ - authz: a group change needs the owning tree, delegates edit in place
+ - zone_record: sort by the legacy rdata columns
+ - session: a failed activity touch no longer rejects unhandled
+->>>>>>> refs/nt/pr/61
++- fix: server stop waits for the stores to disconnect
+ 
+ ### [3.0.3] - 2026-07-27
+ 
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index 16b7be5..a75f989 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -1,12 +1,8 @@
+ FROM node:22-trixie-slim
+ WORKDIR /app
+ COPY package*.json ./
+-ARG NICTOOL_VALIDATE_SPEC
+ # --omit=dev is safe: tests use node:test (stdlib), devDeps are only eslint/prettier
+-RUN npm install --omit=dev \
+-  && if [ -n "$NICTOOL_VALIDATE_SPEC" ]; then \
+-    npm install --omit=dev --no-save "$NICTOOL_VALIDATE_SPEC"; \
+-  fi
++RUN npm install --omit=dev
+ COPY . .
+ EXPOSE 3000
+ CMD ["node", "server.js"]
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+index 60e55dc..505c3aa 100644
+--- a/docker/docker-compose.yml
++++ b/docker/docker-compose.yml
+@@ -24,8 +24,6 @@ services:
+     build:
+       context: ..
+       dockerfile: docker/Dockerfile
+-      args:
+-        NICTOOL_VALIDATE_SPEC: ${NICTOOL_VALIDATE_SPEC:-}
+     ports:
+       - '${API_PORT:-3000}:3000'
+     depends_on:
+diff --git a/lib/audit/test/index.js b/lib/audit/test/index.js
+index 0450095..fde62ab 100644
+--- a/lib/audit/test/index.js
++++ b/lib/audit/test/index.js
+@@ -29,8 +29,8 @@ const hidden = {
+ }
+ 
+ before(async () => {
+-  await Group.create(groupCase)
+-  await User.create(userCase)
++  await Group.create(groupCase, { ifExists: 'return' })
++  await User.create(userCase, { ifExists: 'return' })
+   await Zone.destroy({ id: zone.id })
+   await Zone.create({
+     ...zone,
+diff --git a/lib/authz-plugin.js b/lib/authz-plugin.js
+index 6b2d0b0..4043ff8 100644
+--- a/lib/authz-plugin.js
++++ b/lib/authz-plugin.js
+@@ -206,12 +206,6 @@ const authzPlugin = {
+ 
+       let opts
+       if (action === 'create') {
+-        if (request.payload?.id !== undefined) {
+-          const existingGid = await Authz.getObjectGroupId(resource, request.payload.id)
+-          if (existingGid !== null) {
+-            return respond({ allowed: false, code: 404, msg: `That ${resource} id already exists` }, h)
+-          }
+-        }
+         const target = await resolveTargetGroup(request, resource)
+         opts = {
+           targetGroupId: target?.gid,
+diff --git a/lib/delegation/store/file.js b/lib/delegation/store/file.js
+index bb50265..bedf0e9 100644
+--- a/lib/delegation/store/file.js
++++ b/lib/delegation/store/file.js
+@@ -86,12 +86,20 @@ class DelegationRepoFile extends DelegationBase {
+     if (!TYPES[type]) return []
+     const rows = (await this._load()).filter((r) => r.gid === gid && r.type === type)
+     const active = []
++    const objects = new Map()
+     for (const row of rows) {
+-      if (await this._object(type, row.oid)) active.push(row)
++      const object = await this._object(type, row.oid)
++      if (object) {
++        active.push(row)
++        objects.set(row.oid, object)
++      }
+     }
+     const presented = await this._present(active)
+     const meta = TYPES[type]
+-    for (const p of presented) p[meta.idCol] = p.nt_object_id
++    for (const p of presented) {
++      p[meta.idCol] = p.nt_object_id
++      if (type === 'ZONERECORD') p.nt_zone_id = objects.get(p.nt_object_id).zid
++    }
+     return presented
+   }
+ 
+diff --git a/lib/delegation/store/mysql.js b/lib/delegation/store/mysql.js
+index 025b279..7dc29fd 100644
+--- a/lib/delegation/store/mysql.js
++++ b/lib/delegation/store/mysql.js
+@@ -63,7 +63,7 @@ class DelegationRepoMysql extends DelegationBase {
+         d.perm_delegate AS delegate_delegate,
+         d.zone_perm_add_records AS delegate_add_records,
+         d.zone_perm_delete_records AS delegate_delete_records,
+-        o.${meta.idCol} AS ${meta.idCol}
++        o.${meta.idCol} AS ${meta.idCol}${objType === 'ZONERECORD' ? ',\n        o.nt_zone_id AS nt_zone_id' : ''}
+       FROM nt_delegate d
+       JOIN ${meta.table} o ON o.${meta.idCol} = d.nt_object_id
+       JOIN nt_group g ON g.nt_group_id = d.nt_group_id
+diff --git a/lib/group/store/file.js b/lib/group/store/file.js
+index 7a13c15..a8070c2 100644
+--- a/lib/group/store/file.js
++++ b/lib/group/store/file.js
+@@ -1,10 +1,6 @@
+-<<<<<<< HEAD
+ import FileStore, { nextId } from '../../store/file.js'
+ import { idConflict } from '../../store/error.js'
+-=======
+-import FileStore from '../../store/file.js'
+-import Permission from '../../permission/index.js'
+->>>>>>> refs/nt/pr/61
++import PermissionRepoFile, { permissionRecord } from '../../permission/store/file.js'
+ 
+ import GroupBase from './base.js'
+ 
+@@ -12,6 +8,7 @@ class GroupRepoFile extends GroupBase {
+   constructor(args = {}) {
+     super(args)
+     this.file = new FileStore('group')
++    this.permissionFile = new PermissionRepoFile()
+   }
+ 
+   async _load() {
+@@ -58,8 +55,7 @@ class GroupRepoFile extends GroupBase {
+     const usable_ns = args.usable_ns ?? []
+     delete args.usable_ns
+ 
+-<<<<<<< HEAD
+-    return this.file.mutate('group', (groups, data) => {
++    return this.file.mutate('group', async (groups, data) => {
+       if (args.id !== undefined && groups.some((group) => group.id === args.id)) {
+         return idConflict('group', args.id, options)
+       }
+@@ -67,37 +63,17 @@ class GroupRepoFile extends GroupBase {
+       if (args.id === undefined) args.id = nextId(groups, data.last_id)
+       data.last_id = Math.max(data.last_id ?? 0, args.id)
+ 
+-      const gid = args.id
+-      args.permissions = {
+-        ...JSON.parse(JSON.stringify(defaultPermissions)),
+-        id: gid,
+-        name: `Group ${args.name} perms`,
+-        user: { id: gid, create: false, write: false, delete: false },
+-        group: { id: gid, create: false, write: false, delete: false },
+-        nameserver: {
+-          usable: Array.isArray(usable_ns) ? usable_ns : [],
+-          create: false,
+-          write: false,
+-          delete: false,
+-        },
++      if (!args.permissions) {
++        args.permissions = permissionRecord({
++          id: await this.permissionFile.nextId(),
++          gid: args.id,
++          name: `Group ${args.name} perms`,
++          nameserver: { usable: Array.isArray(usable_ns) ? usable_ns : [] },
++        })
+       }
+-
+       groups.push(args)
+-      return gid
+-    })
+-=======
+-    const groups = await this._load()
+-    groups.push(args)
+-    await this._save(groups)
+-
+-    const gid = args.id
+-    await Permission.create({
+-      gid,
+-      name: `Group ${args.name} perms`,
+-      nameserver: { usable: Array.isArray(usable_ns) ? usable_ns : [] },
++      return args.id
+     })
+-    return gid
+->>>>>>> refs/nt/pr/61
+   }
+ 
+   async get(args_orig) {
+diff --git a/lib/group/store/mysql.js b/lib/group/store/mysql.js
+index 915c5b1..74cd479 100644
+--- a/lib/group/store/mysql.js
++++ b/lib/group/store/mysql.js
+@@ -46,8 +46,7 @@ class Group extends GroupBase {
+   async addToSubgroups(gid, parent_gid, rank = 1000, db = Mysql) {
+     if (!parent_gid || parent_gid === 0) return
+ 
+-    // `rank` is a reserved word in MySQL 8.0+, so it must be backticked; the
+-    // generic Mysql.insert helper doesn't quote column names.
++    // MySQL 8 reserves rank; Mysql.insert does not quote column names.
+     await db.execute('INSERT INTO nt_group_subgroups (nt_group_id,nt_subgroup_id,`rank`) VALUES(?,?,?)', [
+       parent_gid,
+       gid,
+@@ -59,9 +58,7 @@ class Group extends GroupBase {
+       [parent_gid],
+     )
+     if (parent.length === 1 && parent[0].parent_gid !== 0) {
+-      // both the insert and the parent walk must use the same connection:
+-      // reads through the shared connection cannot see this transaction's
+-      // uncommitted writes and would resurrect stale ancestor rows
++      // Keep the insert and parent walk on one connection so each sees the same transaction.
+       await this.addToSubgroups(gid, parent[0].parent_gid, rank - 1, db)
+     }
+   }
+diff --git a/lib/group/test/index.js b/lib/group/test/index.js
+index 9f3c333..542cfda 100644
+--- a/lib/group/test/index.js
++++ b/lib/group/test/index.js
+@@ -35,15 +35,11 @@ after(async () => {
+ 
+ describe('group', function () {
+   before(async () => {
+-<<<<<<< HEAD
+     await Group.create(testCase, { ifExists: 'return' })
+-=======
+-    await Group.create(testCase)
+     await Group.create(moveParentA)
+     await Group.create(moveParentB)
+     await Group.create(moveChild)
+     await Group.create(moveGrandchild)
+->>>>>>> refs/nt/pr/61
+   })
+ 
+   it('gets group by id', async () => {
+diff --git a/lib/mysql.js b/lib/mysql.js
+index 18000bf..47864e3 100644
+--- a/lib/mysql.js
++++ b/lib/mysql.js
+@@ -48,9 +48,7 @@ class Mysql {
+     return rows
+   }
+ 
+-  // The shared connection cannot hold a transaction: concurrent requests
+-  // would interleave statements inside it. Transactions run on their own
+-  // connection and are handed an object with execute/insert/update helpers.
++  // Each transaction gets its own connection to keep concurrent requests isolated.
+   async transaction(fn) {
+     const cfg = await Config.get('mysql')
+     const conn = await mysql.createConnection(cfg)
+diff --git a/lib/permission/store/file.js b/lib/permission/store/file.js
+index cb4adbf..938e756 100644
+--- a/lib/permission/store/file.js
++++ b/lib/permission/store/file.js
+@@ -1,4 +1,4 @@
+-import FileStore from '../../store/file.js'
++import FileStore, { nextId as nextFileId } from '../../store/file.js'
+ import { idConflict } from '../../store/error.js'
+ 
+ import PermissionBase from './base.js'
+@@ -54,18 +54,14 @@ class PermissionRepoFile extends PermissionBase {
+     return this.standaloneFile.save('permission', permissions)
+   }
+ 
+-  async _nextId() {
+-    const [users, groups, standalone] = await Promise.all([
+-      this._loadUsers(),
+-      this._loadGroups(),
+-      this._loadStandalone(),
+-    ])
+-    return (
+-      [...users, ...groups]
+-        .map((row) => row.permissions?.id)
+-        .concat(standalone.map((row) => row.id))
+-        .reduce((max, id) => Math.max(max, id ?? 0), 0) + 1
+-    )
++  async nextId() {
++    return this.standaloneFile.mutate('permission', async (standalone, data) => {
++      const [users, groups] = await Promise.all([this._loadUsers(), this._loadGroups()])
++      const permissions = [...users, ...groups].map((row) => row.permissions).filter(Boolean)
++      const id = nextFileId([...permissions, ...standalone], data.last_id)
++      data.last_id = id
++      return id
++    })
+   }
+ 
+   // ---------------------------------------------------------------------------
+@@ -90,13 +86,8 @@ class PermissionRepoFile extends PermissionBase {
+   // CRUD
+   // ---------------------------------------------------------------------------
+ 
+-<<<<<<< HEAD
+   async create(args, options) {
+-    args = JSON.parse(JSON.stringify(args))
+-=======
+-  async create(args) {
+     args = expandFlatPermissions(JSON.parse(JSON.stringify(args)))
+->>>>>>> refs/nt/pr/61
+     const uid = args.uid ?? args.user?.id
+     const gid = args.gid ?? args.group?.id
+     delete args.uid
+@@ -133,28 +124,14 @@ class PermissionRepoFile extends PermissionBase {
+       const idx = users.findIndex((u) => u.id === uid)
+ 
+       if (idx !== -1) {
+-<<<<<<< HEAD
+         if (users[idx].permissions) return idConflict('permission', users[idx].permissions.id, options)
+-        const perm = JSON.parse(JSON.stringify(args))
+-        perm.id = args.id ?? uid
+-        if (!perm.user) perm.user = {}
+-        perm.user.id = uid
+-        if (!perm.group) perm.group = {}
+-        perm.group.id = gid ?? users[idx].gid
++        const perm = permissionRecord({
++          ...args,
++          id: args.id ?? (await this.nextId()),
++          uid,
++          gid: gid ?? users[idx].gid,
++        })
+         users[idx].permissions = perm
+-=======
+-        // Store inline in user.toml using the actual permission data from args;
+-        // a soft-deleted row is replaced, as the mysql store does
+-        const current = users[idx].permissions
+-        if (!current || current.deleted) {
+-          const perm = deepMerge(permissionDefaults(uid, gid ?? users[idx].gid), args)
+-          perm.id = current?.id ?? args.id ?? (await this._nextId())
+-          perm.user.id = uid
+-          perm.group.id = gid ?? users[idx].gid
+-          perm.deleted = false
+-          users[idx].permissions = perm
+-        }
+->>>>>>> refs/nt/pr/61
+         await this._saveUsers(users)
+         return users[idx].permissions.id
+       }
+@@ -167,24 +144,9 @@ class PermissionRepoFile extends PermissionBase {
+       const idx = groups.findIndex((g) => g.id === gid)
+ 
+       if (idx !== -1) {
+-<<<<<<< HEAD
+         if (groups[idx].permissions) return idConflict('permission', groups[idx].permissions.id, options)
+-        const perm = JSON.parse(JSON.stringify(args))
+-        perm.id = args.id ?? gid
+-        if (!perm.group) perm.group = {}
+-        perm.group.id = gid
++        const perm = permissionRecord({ ...args, id: args.id ?? (await this.nextId()), gid })
+         groups[idx].permissions = perm
+-=======
+-        // Store inline in group.toml
+-        const current = groups[idx].permissions
+-        if (!current || current.deleted) {
+-          const perm = deepMerge(permissionDefaults(null, gid), args)
+-          perm.id = current?.id ?? args.id ?? (await this._nextId())
+-          perm.group.id = gid
+-          perm.deleted = false
+-          groups[idx].permissions = perm
+-        }
+->>>>>>> refs/nt/pr/61
+         await this._saveGroups(groups)
+         return groups[idx].permissions.id
+       }
+@@ -197,23 +159,12 @@ class PermissionRepoFile extends PermissionBase {
+     if (permId === undefined) return undefined
+ 
+     const perms = await this._loadStandalone()
+-<<<<<<< HEAD
+     if (perms.some((permission) => permission.id === permId)) {
+       return idConflict('permission', permId, options)
+-=======
+-    const pidx = perms.findIndex((p) => p.id === permId)
+-    if (pidx === -1 || perms[pidx].deleted) {
+-      const perm = deepMerge(permissionDefaults(uid ?? null, gid ?? null), args)
+-      perm.id = permId
+-      perm.deleted = false
+-      if (uid !== undefined) perm.uid = uid
+-      if (gid !== undefined) perm.gid = gid
+-      if (pidx === -1) perms.push(perm)
+-      else perms[pidx] = perm
+-      await this._saveStandalone(perms)
+->>>>>>> refs/nt/pr/61
+     }
+-    const perm = { ...args, id: permId }
++    const perm = deepMerge(permissionDefaults(uid ?? null, gid ?? null), args)
++    perm.id = permId
++    perm.deleted = false
+     if (uid !== undefined) perm.uid = uid
+     if (gid !== undefined) perm.gid = gid
+     perms.push(perm)
+@@ -225,9 +176,7 @@ class PermissionRepoFile extends PermissionBase {
+     args = JSON.parse(JSON.stringify(args))
+     const deletedArg = args.deleted ?? false
+ 
+-    // an inline row is only returned in the deleted state asked for, so a
+-    // deleted explicit permission stops authorizing and getEffective falls
+-    // back to the group
++    // Deleted explicit permissions stop authorizing, so effective reads fall back to the group.
+     const inline = (perm) => {
+       if (!perm) return undefined
+       if (Boolean(perm.deleted) !== Boolean(deletedArg)) return undefined
+@@ -246,9 +195,7 @@ class PermissionRepoFile extends PermissionBase {
+     }
+ 
+     if (args.id !== undefined) {
+-      // user rows first, group rows last: explicit ids can collide with
+-      // generated ones (fixtures give user 4096 and group 4096 the same id),
+-      // and the user's own row is the one /permission/{id} means
++      // Prefer user rows because legacy fixtures can reuse permission ids for users and groups.
+       const users = await this._loadUsers()
+       const fromUser = inline(users.find((u) => u.permissions?.id === args.id)?.permissions)
+       if (fromUser) return fromUser
+@@ -457,4 +404,13 @@ function permissionDefaults(uid, gid) {
+   }
+ }
+ 
++export function permissionRecord({ id, uid = null, gid = null, ...args }) {
++  const permission = deepMerge(permissionDefaults(uid, gid), expandFlatPermissions(args))
++  permission.id = id
++  permission.user.id = uid
++  permission.group.id = gid
++  permission.deleted = false
++  return permission
++}
++
+ export default PermissionRepoFile
+diff --git a/lib/permission/store/mysql.js b/lib/permission/store/mysql.js
+index c24ccf3..84e73cd 100644
+--- a/lib/permission/store/mysql.js
++++ b/lib/permission/store/mysql.js
+@@ -37,7 +37,6 @@ class PermissionRepoMySQL extends PermissionBase {
+     this.mysql = Mysql
+   }
+ 
+-<<<<<<< HEAD
+   async create(args, options) {
+     args = objectToDb(args)
+ 
+@@ -60,65 +59,23 @@ class PermissionRepoMySQL extends PermissionBase {
+     // every later read of that permission ambiguous.
+     let rows = []
+     if (args.uid !== undefined) {
+-      rows = await Mysql.execute('SELECT nt_perm_id FROM nt_perm WHERE nt_user_id = ? LIMIT 1', [args.uid])
+-    } else if (args.gid !== undefined) {
+       rows = await Mysql.execute(
+-        'SELECT nt_perm_id FROM nt_perm WHERE nt_group_id = ? AND nt_user_id IS NULL LIMIT 1',
+-        [args.gid],
+-      )
+-=======
+-  async create(args) {
+-    if (args.id) {
+-      const rows = await Mysql.execute(
+-        'SELECT nt_perm_id, deleted FROM nt_perm WHERE nt_perm_id = ? LIMIT 1',
+-        [args.id],
++        'SELECT nt_perm_id FROM nt_perm WHERE nt_user_id = ? ORDER BY deleted, nt_perm_id LIMIT 1',
++        [args.uid],
+       )
+-      if (rows.length > 0) return this.reuse(rows[0], args)
+-    }
+-
+-    // v2 uses uid=0 for group rows; v3-created rows use NULL.
+-    if (args.gid !== undefined && args.uid === undefined) {
+-      const rows = await Mysql.execute(
+-        `SELECT nt_perm_id, deleted FROM nt_perm
++    } else if (args.gid !== undefined) {
++      rows = await Mysql.execute(
++        `SELECT nt_perm_id FROM nt_perm
+          WHERE nt_group_id = ? AND (nt_user_id IS NULL OR nt_user_id = 0)
+          ORDER BY deleted, nt_perm_id LIMIT 1`,
+         [args.gid],
+       )
+-      if (rows.length > 0) return this.reuse(rows[0], args)
+-    }
+-
+-    // ...and user-level rows: a second one makes get({uid}) throw, which would
+-    // then fail every request that user makes
+-    if (args.uid !== undefined && args.uid !== null) {
+-      const rows = await Mysql.execute(
+-        `SELECT nt_perm_id, deleted FROM nt_perm
+-         WHERE nt_user_id = ? ORDER BY deleted, nt_perm_id LIMIT 1`,
+-        [args.uid],
+-      )
+-      if (rows.length > 0) return this.reuse(rows[0], args)
+->>>>>>> refs/nt/pr/61
+     }
+     if (rows.length > 0) return idConflict('permission', rows[0].nt_perm_id, options)
+ 
+     return await Mysql.execute(...Mysql.insert(`nt_perm`, mapToDbColumn(args, permDbMap)))
+   }
+ 
+-  async reuse(row, args) {
+-    if (row.deleted === 1) {
+-      const replacement = Object.fromEntries(permissionColumns.map((field) => [field, 0]))
+-      Object.assign(replacement, {
+-        self_write: 0,
+-        usable_ns: '',
+-        inherit_perm: 0,
+-        ...mapToDbColumn(objectToDb(args), permDbMap),
+-        deleted: 0,
+-      })
+-      delete replacement.nt_perm_id
+-      await Mysql.execute(...Mysql.update('nt_perm', `nt_perm_id=${row.nt_perm_id}`, replacement))
+-    }
+-    return row.nt_perm_id
+-  }
+-
+   async get(args) {
+     args = JSON.parse(JSON.stringify(args))
+     if (args.deleted === undefined) args.deleted = false
+@@ -281,11 +238,7 @@ function dbToObject(row) {
+   return row
+ }
+ 
+-/**
+- * Flatten the nested JSON shape to db columns for an UPDATE, touching only the
+- * keys the caller supplied. objectToDb() can't be reused here: it writes every
+- * boolean field unconditionally, which would reset fields the caller omitted.
+- */
++// Flatten only supplied fields; objectToDb() would reset omitted booleans.
+ function partialToDb(args) {
+   const row = JSON.parse(JSON.stringify(args))
+ 
+diff --git a/lib/permission/test/index.js b/lib/permission/test/index.js
+index e4cfb1d..793ed93 100644
+--- a/lib/permission/test/index.js
++++ b/lib/permission/test/index.js
+@@ -10,15 +10,8 @@ import userTestCase from '../../user/test/user.json' with { type: 'json' }
+ import permTestCase from './permission.json' with { type: 'json' }
+ 
+ before(async () => {
+-<<<<<<< HEAD
+   await Group.create(groupTestCase, { ifExists: 'return' })
+   await User.create(userTestCase, { ifExists: 'return' })
+-=======
+-  await Group.create({ id: 1, parent_gid: 0, name: 'root' })
+-  await Permission.create({ gid: 1, name: 'Root group permissions' })
+-  await Group.create(groupTestCase)
+-  await User.create(userTestCase)
+->>>>>>> refs/nt/pr/61
+ })
+ 
+ after(async () => {
+@@ -26,17 +19,18 @@ after(async () => {
+ })
+ 
+ describe('permission', function () {
++  it('creates a permission', async () => {
++    assert.ok(await Permission.create(permTestCase, { ifExists: 'return' }))
++  })
++
+   it('reads the seeded v2-style group permission row', async () => {
++    await Group.create({ id: 1, parent_gid: 0, name: 'root' }, { ifExists: 'return' })
+     const p = await Permission.get({ gid: 1 })
+     assert.ok(p)
+     assert.equal(p.group.id, 1)
+     assert.equal(p.user.id, null)
+   })
+ 
+-  it('creates a permission', async () => {
+-    assert.ok(await Permission.create(permTestCase, { ifExists: 'return' }))
+-  })
+-
+   it('get: by id', async () => {
+     assert.deepEqual(await Permission.get({ id: permTestCase.id }), permTestCase)
+   })
+@@ -100,10 +94,11 @@ describe('permission', function () {
+     await Permission.delete({ id: permTestCase.id, deleted: 0 })
+   })
+ 
+-  it('reactivates a soft-deleted permission instead of duplicating it', async () => {
++  it('rejects a create over a soft-deleted permission', async () => {
+     await Permission.delete({ id: permTestCase.id })
+-    assert.equal(await Permission.create(permTestCase), permTestCase.id)
+-    assert.ok(await Permission.get({ id: permTestCase.id }))
++    await assert.rejects(Permission.create(permTestCase), /already exists/)
++    assert.ok(await Permission.get({ id: permTestCase.id, deleted: true }))
++    await Permission.delete({ id: permTestCase.id, deleted: false })
+   })
+ 
+   it('deletes a permission', async () => {
+diff --git a/lib/session/store/file.js b/lib/session/store/file.js
+index 3f797e0..fcb13bd 100644
+--- a/lib/session/store/file.js
++++ b/lib/session/store/file.js
+@@ -1,21 +1,5 @@
+ import FileStore, { nextId } from '../../store/file.js'
+ 
+-let sessionWriteQueue = Promise.resolve()
+-
+-async function withSessionWriteLock(fn) {
+-  const previous = sessionWriteQueue
+-  let release
+-  sessionWriteQueue = new Promise((resolve) => {
+-    release = resolve
+-  })
+-  await previous
+-  try {
+-    return await fn()
+-  } finally {
+-    release()
+-  }
+-}
+-
+ // Map legacy nt_* column names to the friendly API names used throughout.
+ function normalizeArgs(args) {
+   if (args.nt_user_session_id !== undefined) {
+@@ -48,27 +32,11 @@ class SessionRepoFile {
+ 
+   async create(args) {
+     args = normalizeArgs(JSON.parse(JSON.stringify(args)))
+-<<<<<<< HEAD
+-
+     return this.file.mutate('session', (sessions, data) => {
+-      const existing = sessions.find(
+-        (session) => session.uid === args.uid && session.session === args.session,
+-      )
+-      if (existing) return existing.id
+-
+       args.id = nextId(sessions, data.last_id)
+       data.last_id = args.id
+       sessions.push(args)
+       return args.id
+-=======
+-    return withSessionWriteLock(async () => {
+-      const sessions = await this._load()
+-      const nextId = sessions.reduce((max, s) => Math.max(max, s.id ?? 0), 0) + 1
+-      args.id = nextId
+-      sessions.push(args)
+-      await this._save(sessions)
+-      return nextId
+->>>>>>> refs/nt/pr/61
+     })
+   }
+ 
+diff --git a/lib/store-access.test.js b/lib/store-access.test.js
+index 2856b24..9beca91 100644
+--- a/lib/store-access.test.js
++++ b/lib/store-access.test.js
+@@ -4,9 +4,7 @@ import { describe, it } from 'node:test'
+ import path from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ 
+-// Data access goes through lib/<entity>/store/ per AGENTS.md. Only stores
+-// may talk to the mysql wrapper; this walks the source tree and
+-// fails on any other module that reaches for it.
++// Only store modules may import the mysql wrapper required by AGENTS.md.
+ const ROOTS = ['lib', 'routes']
+ const SKIP_PATH = (p) => p.split(path.sep).includes('store') || p.endsWith('.test.js')
+ 
+diff --git a/lib/store/file.js b/lib/store/file.js
+index b55fb01..94aef8f 100644
+--- a/lib/store/file.js
++++ b/lib/store/file.js
+@@ -33,9 +33,6 @@ async function serialize(file, callback) {
+   }
+ }
+ 
+-// one writer per file at a time, whichever FileStore instance holds it
+-const writeQueues = new Map()
+-
+ export function resolveCodec(type = storeConfig().type) {
+   return codecs[type] ?? jsonCodec
+ }
+@@ -124,28 +121,8 @@ export class FileStore {
+     })
+   }
+ 
+-  /**
+-   * Load, mutate in place, save — serialized per file (not re-entrant) so concurrent writers
+-   * cannot overwrite each other's rows. Resolves to whatever mutate returns.
+-   */
+-  async update(key, mutate) {
+-    const previous = writeQueues.get(this.basename) ?? Promise.resolve()
+-    let release
+-    writeQueues.set(
+-      this.basename,
+-      new Promise((resolve) => {
+-        release = resolve
+-      }),
+-    )
+-    await previous
+-    try {
+-      const rows = await this.load(key)
+-      const result = await mutate(rows)
+-      await this.save(key, rows)
+-      return result
+-    } finally {
+-      release()
+-    }
++  async update(key, callback) {
++    return this.mutate(key, callback)
+   }
+ }
+ 
+diff --git a/lib/user/store/file.js b/lib/user/store/file.js
+index 7c1f7f4..b9cf518 100644
+--- a/lib/user/store/file.js
++++ b/lib/user/store/file.js
+@@ -2,26 +2,11 @@ import FileStore, { nextId } from '../../store/file.js'
+ import { idConflict } from '../../store/error.js'
+ import Config from '../../config.js'
+ import Credentials from '../credentials.js'
+-import Permission from '../../permission/index.js'
++import PermissionRepoFile, { permissionRecord } from '../../permission/store/file.js'
+ import UserBase from './base.js'
+ import { splitQualifiedUsername } from '../qualified.js'
+ 
+ const boolFields = ['is_admin', 'deleted']
+-let userWriteQueue = Promise.resolve()
+-
+-async function withUserWriteLock(fn) {
+-  const previous = userWriteQueue
+-  let release
+-  userWriteQueue = new Promise((resolve) => {
+-    release = resolve
+-  })
+-  await previous
+-  try {
+-    return await fn()
+-  } finally {
+-    release()
+-  }
+-}
+ 
+ // Read the group file directly (never via the Group module) to avoid circular imports.
+ async function loadGroupPerm(groupFile, gid) {
+@@ -47,6 +32,7 @@ class UserRepoFile extends UserBase {
+     this.cfg = Config.getSync('http')
+     this.file = new FileStore('user')
+     this.groupFile = new FileStore('group')
++    this.permissionFile = new PermissionRepoFile()
+   }
+ 
+   async _load() {
+@@ -187,7 +173,6 @@ class UserRepoFile extends UserBase {
+     return users.length
+   }
+ 
+-<<<<<<< HEAD
+   async create(args, options) {
+     args = JSON.parse(JSON.stringify(args))
+ 
+@@ -198,53 +183,22 @@ class UserRepoFile extends UserBase {
+       Object.assign(args, await Credentials.forStorage(args.password, args.pass_salt))
+     }
+ 
+-    return this.file.mutate('user', (users, data) => {
++    return this.file.mutate('user', async (users, data) => {
+       if (args.id !== undefined && users.some((user) => user.id === args.id)) {
+         return idConflict('user', args.id, options)
+       }
+ 
+       if (args.id === undefined) args.id = nextId(users, data.last_id)
+       data.last_id = Math.max(data.last_id ?? 0, args.id)
+-
+-      if (inherit === false) {
+-        args.permissions = {
+-          ...JSON.parse(JSON.stringify(defaultPermissions)),
+-          id: args.id,
+-          user: { id: args.id, create: false, write: false, delete: false },
+-          group: { id: args.gid, create: false, write: false, delete: false },
+-        }
+-      }
+-
+-      users.push(args)
+-=======
+-  async create(args) {
+-    return withUserWriteLock(async () => {
+-      const users = await this._load()
+-      if (args.id && users.some((user) => user.id === args.id)) return args.id
+-
+-      args = JSON.parse(JSON.stringify(args))
+-      if (args.id === undefined) {
+-        args.id = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1
+-      }
+-
+-      const inherit = args.inherit_group_permissions
+-      delete args.inherit_group_permissions
+-
+-      if (args.password) {
+-        Object.assign(args, await Credentials.forStorage(args.password, args.pass_salt))
+-      }
+-
+-      users.push(args)
+-      await this._save(users)
+-      if (inherit === false) {
+-        await Permission.create({
++      if (inherit === false && !args.permissions) {
++        args.permissions = permissionRecord({
++          id: await this.permissionFile.nextId(),
+           uid: args.id,
+           gid: args.gid,
+-          inherit: false,
+           name: `User ${args.username} perms`,
+         })
+       }
+->>>>>>> refs/nt/pr/61
++      users.push(args)
+       return args.id
+     })
+   }
+@@ -253,34 +207,33 @@ class UserRepoFile extends UserBase {
+     if (!args.id) return false
+     args = JSON.parse(JSON.stringify(args))
+ 
+-    const users = await this._load()
+-    const idx = users.findIndex((u) => u.id === args.id)
+-    if (idx === -1) return false
+-
+     const inherit = args.inherit_group_permissions
+     delete args.inherit_group_permissions
+ 
+-    if (inherit === true) {
+-      delete users[idx].permissions
+-    } else if (inherit === false && users[idx].permissions) {
+-      users[idx].permissions.inherit = false
+-    }
++    return this.file.mutate('user', async (users) => {
++      const idx = users.findIndex((user) => user.id === args.id)
++      if (idx === -1) return false
++
++      if (inherit === true) {
++        delete users[idx].permissions
++      } else if (inherit === false && !users[idx].permissions) {
++        users[idx].permissions = permissionRecord({
++          id: await this.permissionFile.nextId(),
++          uid: users[idx].id,
++          gid: args.gid ?? users[idx].gid,
++          name: `User ${users[idx].username} perms`,
++        })
++      } else if (inherit === false) {
++        users[idx].permissions.inherit = false
++      }
+ 
+-    if (args.gid !== undefined && users[idx].permissions?.group) {
+-      users[idx].permissions.group.id = args.gid
+-    }
++      if (args.gid !== undefined && users[idx].permissions?.group) {
++        users[idx].permissions.group.id = args.gid
++      }
+ 
+-    users[idx] = { ...users[idx], ...args }
+-    await this._save(users)
+-    if (inherit === false && !users[idx].permissions) {
+-      await Permission.create({
+-        uid: users[idx].id,
+-        gid: users[idx].gid,
+-        inherit: false,
+-        name: `User ${users[idx].username} perms`,
+-      })
+-    }
+-    return true
++      users[idx] = { ...users[idx], ...args }
++      return true
++    })
+   }
+ 
+   async delete(args) {
+diff --git a/lib/user/store/mysql.js b/lib/user/store/mysql.js
+index 2d93d86..1aeb5c0 100644
+--- a/lib/user/store/mysql.js
++++ b/lib/user/store/mysql.js
+@@ -72,17 +72,10 @@ class UserRepoMySQL extends UserBase {
+     }
+   }
+ 
+-<<<<<<< HEAD
+   async create(args, options) {
+     if (args.id !== undefined) {
+       const u = [...(await this.get({ id: args.id })), ...(await this.get({ id: args.id, deleted: true }))]
+       if (u.length > 0) return idConflict('user', args.id, options)
+-=======
+-  async create(args) {
+-    if (args.id) {
+-      const u = await this.get({ id: args.id })
+-      if (u.length === 1) return u[0].id
+->>>>>>> refs/nt/pr/61
+     }
+ 
+     args = JSON.parse(JSON.stringify(args))
+diff --git a/lib/zone/store/file.js b/lib/zone/store/file.js
+index 5640867..a3a9abc 100644
+--- a/lib/zone/store/file.js
++++ b/lib/zone/store/file.js
+@@ -74,32 +74,22 @@ class ZoneRepoFile extends ZoneBase {
+     return r
+   }
+ 
+-<<<<<<< HEAD
+   async create(args, options) {
+-    args = JSON.parse(JSON.stringify(args))
+-
+-    return this.file.mutate('zone', (zones, data) => {
+-      if (args.id !== undefined && zones.some((zone) => zone.id === args.id)) {
+-        return idConflict('zone', args.id, options)
+-      }
+-
+-      if (args.id === undefined) args.id = nextId(zones, data.last_id)
+-      data.last_id = Math.max(data.last_id ?? 0, args.id)
+-      zones.push(args)
+-      return args.id
+-=======
+-  async create(args) {
+     const { nameservers, ...zone } = args
+     return withZoneWriteLock(async () => {
+-      const zones = await this._load()
+-      if (zone.id && zones.some((z) => z.id === zone.id)) return zone.id
+-      if (zone.deleted !== true) assertZoneNameAvailable(zones, zone.zone)
+-      if (!zone.id) zone.id = zones.reduce((max, z) => Math.max(max, z.id ?? 0), 0) + 1
+-      zones.push(JSON.parse(JSON.stringify(zone)))
+-      await this._save(zones)
++      const result = await this.file.mutate('zone', (zones, data) => {
++        if (zone.id && zones.some((row) => row.id === zone.id)) {
++          return { id: idConflict('zone', zone.id, options), created: false }
++        }
++        if (zone.deleted !== true) assertZoneNameAvailable(zones, zone.zone)
++        if (!zone.id) zone.id = nextId(zones, data.last_id)
++        data.last_id = Math.max(data.last_id ?? 0, zone.id)
++        zones.push(JSON.parse(JSON.stringify(zone)))
++        return { id: zone.id, created: true }
++      })
++      if (!result.created) return result.id
+       if (Array.isArray(nameservers)) await this._replaceNs(zone.id, nameservers)
+       return zone.id
+->>>>>>> refs/nt/pr/61
+     })
+   }
+ 
+diff --git a/lib/zone/store/mysql.js b/lib/zone/store/mysql.js
+index 5b33dab..bbe06af 100644
+--- a/lib/zone/store/mysql.js
++++ b/lib/zone/store/mysql.js
+@@ -1,12 +1,8 @@
+ import { createHash } from 'node:crypto'
+ 
+ import Mysql from '../../mysql.js'
+-<<<<<<< HEAD
+-import ZoneBase from './base.js'
+ import { idConflict } from '../../store/error.js'
+-=======
+ import ZoneBase, { canonicalZoneName, ZoneNameConflictError } from './base.js'
+->>>>>>> refs/nt/pr/61
+ import { mapToDbColumn } from '../../util.js'
+ 
+ const zoneDbMap = { id: 'nt_zone_id', gid: 'nt_group_id' }
+diff --git a/package.json b/package.json
+index aa746dc..b7a766a 100644
+--- a/package.json
++++ b/package.json
+@@ -61,11 +61,7 @@
+     "@hapi/vision": "^7.0.3",
+     "@msimerson/hapi-openapi": "^18.0.3",
+     "@nictool/dns-resource-record": "^1.8.2",
+-<<<<<<< HEAD
+     "@nictool/validate": "^1.0.1",
+-=======
+-    "@nictool/validate": "^1.0.0",
+->>>>>>> refs/nt/pr/61
+     "joi": "^18.2.3",
+     "mysql2": "^3.23.2",
+     "qs": "^6.15.3",
+diff --git a/routes/authz.test.js b/routes/authz.test.js
+index 46fce77..1729b1f 100644
+--- a/routes/authz.test.js
++++ b/routes/authz.test.js
+@@ -132,6 +132,8 @@ const NS = {
+ }
+ 
+ let server
++let createdUserId
++let delegatedCreatedRecordId
+ const authFull = { headers: {} }
+ const authLimited = { headers: {} }
+ 
+@@ -276,6 +278,7 @@ after(async () => {
+   await Delegation.delete({ gid: 4201, oid: 4200, type: 'ZONE' })
+   await Delegation.delete({ gid: 4201, oid: 4201, type: 'ZONE' })
+   await ZoneRecord.destroy({ id: ZR_DELEGATED_CREATE.id })
++  if (delegatedCreatedRecordId) await ZoneRecord.destroy({ id: delegatedCreatedRecordId })
+   await Nameserver.destroy({ id: NS.id })
+   await ZoneRecord.destroy({ id: ZR_OUTSIDE.id })
+   await ZoneRecord.destroy({ id: ZR_INTREE_OTHER.id })
+@@ -287,8 +290,11 @@ after(async () => {
+     if (p) await Permission.destroy({ id: p.id })
+     await User.destroy({ id: u.id })
+   }
+-  const createdPerm = await Permission.get({ uid: U_CREATED.id })
+-  if (createdPerm) await Permission.destroy({ id: createdPerm.id })
++  if (createdUserId) {
++    const createdPerm = await Permission.get({ uid: createdUserId })
++    if (createdPerm) await Permission.destroy({ id: createdPerm.id })
++    await User.destroy({ id: createdUserId })
++  }
+   await User.destroy({ id: U_CREATED.id })
+   for (const g of [G_CHILD, G_OUTSIDE, G_ROOT]) {
+     await Group.destroy({ id: g.id })
+@@ -449,17 +455,6 @@ describe('authz plugin - zone routes', () => {
+     assert.equal(zone.serial, before.serial)
+   })
+ 
+-  it('403 for POST /zone when the requested id already exists', async () => {
+-    const res = await server.inject({
+-      method: 'POST',
+-      url: '/zone',
+-      headers: authFull.headers,
+-      payload: { ...Z_OUTSIDE, gid: G_ROOT.id },
+-    })
+-    assert.equal(res.statusCode, 403)
+-    assert.match(res.result.error_msg, /already exists/)
+-  })
+-
+   it('requires delete permission when PUT changes deleted state', async () => {
+     const perm = await Permission.get({ uid: U_FULL.id })
+     await Permission.put({ id: perm.id, zone_delete: false })
+@@ -553,15 +548,18 @@ describe('authz plugin - user self-ops', () => {
+   })
+ 
+   it('does not allow user creation to set is_admin', async () => {
++    const payload = { ...U_CREATED, is_admin: true }
++    delete payload.id
+     const res = await server.inject({
+       method: 'POST',
+       url: '/user',
+       headers: authFull.headers,
+-      payload: { ...U_CREATED, is_admin: true },
++      payload,
+     })
+     assert.equal(res.statusCode, 201)
+ 
+-    const [stored] = await User.get({ id: U_CREATED.id })
++    createdUserId = res.result.user[0].id
++    const [stored] = await User.get({ id: createdUserId })
+     assert.equal(stored.is_admin, false)
+   })
+ })
+@@ -709,11 +707,13 @@ describe('authz plugin - zone record delegation', () => {
+   })
+ 
+   it('enforces add/delete-record flags on a delegated zone', async () => {
++    const payload = { ...ZR_DELEGATED_CREATE }
++    delete payload.id
+     let res = await server.inject({
+       method: 'POST',
+       url: '/zone_record',
+       headers: authFull.headers,
+-      payload: ZR_DELEGATED_CREATE,
++      payload,
+     })
+     assert.equal(res.statusCode, 403)
+ 
+@@ -729,13 +729,14 @@ describe('authz plugin - zone record delegation', () => {
+       method: 'POST',
+       url: '/zone_record',
+       headers: authFull.headers,
+-      payload: ZR_DELEGATED_CREATE,
++      payload,
+     })
+     assert.equal(res.statusCode, 201)
++    delegatedCreatedRecordId = res.result.zone_record[0].id
+ 
+     res = await server.inject({
+       method: 'DELETE',
+-      url: `/zone_record/${ZR_DELEGATED_CREATE.id}`,
++      url: `/zone_record/${delegatedCreatedRecordId}`,
+       headers: authFull.headers,
+     })
+     assert.equal(res.statusCode, 200)
+@@ -928,10 +929,20 @@ describe('authz plugin - delegation routes', () => {
+ 
+ describe('authz plugin - create target resolution', () => {
+   const G_PLANTED = 4212
++  let plantedId
+ 
+-  after(async () => {
++  const clear = async () => {
++    if (plantedId) await Group.destroy({ id: plantedId })
+     await Group.destroy({ id: G_PLANTED })
+-  })
++    for (const name of ['authz-planted', 'authz-rootless']) {
++      for (const deleted of [false, true]) {
++        for (const group of await Group.get({ name, deleted })) await Group.destroy({ id: group.id })
++      }
++    }
++  }
++
++  before(clear)
++  after(clear)
+ 
+   it('authorizes the group a new group is actually filed under', async () => {
+     const res = await server.inject({
+@@ -939,13 +950,12 @@ describe('authz plugin - create target resolution', () => {
+       url: '/group',
+       headers: authFull.headers,
+       payload: {
+-        id: G_PLANTED,
+         name: 'authz-planted',
+         parent_gid: G_OUTSIDE.id,
+       },
+     })
+     assert.equal(res.statusCode, 403)
+-    assert.equal((await Group.get({ id: G_PLANTED })).length, 0)
++    assert.equal((await Group.get({ name: 'authz-planted' })).length, 0)
+   })
+ 
+   it('403 for POST /group with no parent group', async () => {
+@@ -953,11 +963,11 @@ describe('authz plugin - create target resolution', () => {
+       method: 'POST',
+       url: '/group',
+       headers: authFull.headers,
+-      payload: { id: G_PLANTED, name: 'authz-rootless' },
++      payload: { name: 'authz-rootless' },
+     })
+     assert.equal(res.statusCode, 403)
+     assert.match(res.result.error_msg, /No target group/)
+-    assert.equal((await Group.get({ id: G_PLANTED })).length, 0)
++    assert.equal((await Group.get({ name: 'authz-rootless' })).length, 0)
+   })
+ 
+   it('201 for POST /group inside the caller tree', async () => {
+@@ -965,10 +975,11 @@ describe('authz plugin - create target resolution', () => {
+       method: 'POST',
+       url: '/group',
+       headers: authFull.headers,
+-      payload: { id: G_PLANTED, name: 'authz-planted', parent_gid: G_ROOT.id },
++      payload: { name: 'authz-planted', parent_gid: G_ROOT.id },
+     })
+     assert.equal(res.statusCode, 201)
+-    const [created] = await Group.get({ id: G_PLANTED })
++    plantedId = res.result.group[0].id
++    const [created] = await Group.get({ id: plantedId })
+     assert.equal(created.parent_gid, G_ROOT.id)
+   })
+ })
+@@ -1185,6 +1196,12 @@ describe('authz plugin - delegation type and pseudo access', () => {
+       perm_delegate: false,
+     })
+     try {
++      const [delegation] = await Delegation.get({
++        gid: G_OUTSIDE.id,
++        type: 'ZONERECORD',
++      })
++      assert.equal(delegation.nt_zone_id, Z_INTREE.id)
++
+       const res = await server.inject({
+         method: 'GET',
+         url: `/zone/${Z_INTREE.id}`,
+@@ -1495,15 +1512,17 @@ describe('authz plugin - permission administration', () => {
+     assert.equal(post.statusCode, 403)
+     assert.match(post.result.error_msg, /deleted group/)
+ 
++    const zonePayload = { ...Z_INTREE, gid: G_GONE.id, zone: 'gone.authz.example.com.' }
++    delete zonePayload.id
+     const zone = await server.inject({
+       method: 'POST',
+       url: '/zone',
+       headers: authFull.headers,
+-      payload: { ...Z_INTREE, id: 4220, gid: G_GONE.id, zone: 'gone.authz.example.com.' },
++      payload: zonePayload,
+     })
+     assert.equal(zone.statusCode, 403)
+     assert.match(zone.result.error_msg, /No active target group/)
+-    assert.equal((await Zone.get({ id: 4220 })).length, 0)
++    assert.equal((await Zone.get({ zone: zonePayload.zone })).length, 0)
+   })
+ 
+   it('refuses a permission with no target', async () => {
+@@ -1519,6 +1538,7 @@ describe('authz plugin - permission administration', () => {
+ })
+ 
+ describe('authz plugin - user permission transitions', () => {
++  let grantedUserId
+   const U_MOVED = {
+     id: 4222,
+     gid: G_CHILD.id,
+@@ -1542,6 +1562,11 @@ describe('authz plugin - user permission transitions', () => {
+   }
+ 
+   const clear = async () => {
++    if (grantedUserId) {
++      const permission = await Permission.get({ uid: grantedUserId })
++      if (permission) await Permission.destroy({ id: permission.id })
++      await User.destroy({ id: grantedUserId })
++    }
+     for (const u of [U_MOVED, U_GRANTED]) {
+       const p = await Permission.get({ uid: u.id })
+       if (p) await Permission.destroy({ id: p.id })
+@@ -1611,14 +1636,17 @@ describe('authz plugin - user permission transitions', () => {
+     const actor = await Permission.get({ uid: U_FULL.id })
+     await Permission.put({ id: actor.id, zone_delete: false })
+     try {
++      const payload = { ...U_GRANTED, zone_write: true, zone_delete: true }
++      delete payload.id
+       const res = await server.inject({
+         method: 'POST',
+         url: '/user',
+         headers: authFull.headers,
+-        payload: { ...U_GRANTED, zone_write: true, zone_delete: true },
++        payload,
+       })
+       assert.equal(res.statusCode, 201)
+-      const perm = await Permission.get({ uid: U_GRANTED.id })
++      grantedUserId = res.result.user[0].id
++      const perm = await Permission.get({ uid: grantedUserId })
+       assert.equal(perm.inherit, false)
+       assert.equal(perm.zone.write, true)
+       assert.equal(perm.zone.delete, false)
+@@ -1654,27 +1682,36 @@ describe('authz plugin - user permission transitions', () => {
+ 
+ describe('authz plugin - group permission mutation', () => {
+   const G_MADE = { id: 4221, parent_gid: G_ROOT.id, name: 'authz-made' }
++  let madeId
+ 
+-  before(async () => {
++  const clear = async () => {
++    if (madeId) await Group.destroy({ id: madeId })
+     await Group.destroy({ id: G_MADE.id })
+-  })
++    for (const deleted of [false, true]) {
++      for (const group of await Group.get({ name: G_MADE.name, deleted })) {
++        await Group.destroy({ id: group.id })
++      }
++    }
++  }
+ 
+-  after(async () => {
+-    await Group.destroy({ id: G_MADE.id })
+-  })
++  before(clear)
++  after(clear)
+ 
+   it('POST /group stores only the permissions the actor may grant', async () => {
+     const actor = await Permission.get({ uid: U_FULL.id })
+     await Permission.put({ id: actor.id, zone_delete: false })
+     try {
++      const payload = { ...G_MADE, zone_write: true, zone_delete: true, usable_ns: [4200, 4201] }
++      delete payload.id
+       const res = await server.inject({
+         method: 'POST',
+         url: '/group',
+         headers: authFull.headers,
+-        payload: { ...G_MADE, zone_write: true, zone_delete: true, usable_ns: [4200, 4201] },
++        payload,
+       })
+       assert.equal(res.statusCode, 201)
+-      const perm = await Permission.get({ gid: G_MADE.id })
++      madeId = res.result.group[0].id
++      const perm = await Permission.get({ gid: madeId })
+       assert.equal(perm.zone.write, true)
+       assert.equal(perm.zone.delete, false)
+       assert.deepEqual(perm.nameserver.usable.map(String), ['4200'])
+@@ -1689,13 +1726,13 @@ describe('authz plugin - group permission mutation', () => {
+     try {
+       const res = await server.inject({
+         method: 'PUT',
+-        url: `/group/${G_MADE.id}`,
++        url: `/group/${madeId}`,
+         headers: authFull.headers,
+         payload: { name: 'authz-remade', zone_delete: true, zonerecord_write: true },
+       })
+       assert.equal(res.statusCode, 200)
+       assert.equal(res.result.group[0].name, 'authz-remade')
+-      const perm = await Permission.get({ gid: G_MADE.id })
++      const perm = await Permission.get({ gid: madeId })
+       assert.equal(perm.zone.write, true)
+       assert.equal(perm.zone.delete, false)
+       assert.equal(perm.zonerecord.write, true)
+@@ -1724,7 +1761,7 @@ describe('authz plugin - group permission mutation', () => {
+     assert.equal(tree.statusCode, 200)
+     const ids = tree.result.group.map((g) => g.id)
+     assert.ok(ids.includes(G_CHILD.id))
+-    assert.ok(ids.includes(G_MADE.id))
++    assert.ok(ids.includes(madeId))
+   })
+ })
+ 
+diff --git a/routes/group.test.js b/routes/group.test.js
+index 9c0dc28..e964f61 100644
+--- a/routes/group.test.js
++++ b/routes/group.test.js
+@@ -15,16 +15,11 @@ let case2Id
+ 
+ before(async () => {
+   server = await init()
+-<<<<<<< HEAD
+   await Group.create(groupCase, { ifExists: 'return' })
+   await User.create(userCase, { ifExists: 'return' })
+-=======
+-  await Group.create(groupCase)
+-  await User.create(userCase)
+   await grantGroupPermissions(groupCase.id)
+   const permissions = await Permission.getEffective(userCase.id)
+   assert.equal(permissions.group.create, true)
+->>>>>>> refs/nt/pr/61
+ })
+ 
+ after(async () => {
+@@ -74,15 +69,11 @@ describe('group routes', () => {
+       headers: auth.headers,
+       payload: testCase,
+     })
+-<<<<<<< HEAD
+-    assert.equal(res.statusCode, 201)
++    assert.equal(res.statusCode, 201, JSON.stringify(res.result))
+     assert.equal(res.result.group.length, 1)
+     assert.equal(res.result.group[0].name, 'example2.com')
+     case2Id = res.result.group[0].id
+     assert.ok(Number.isInteger(case2Id))
+-=======
+-    assert.equal(res.statusCode, 201, JSON.stringify(res.result))
+->>>>>>> refs/nt/pr/61
+   })
+ 
+   it('PUT /group/{id} keeps using the route id', async () => {
+@@ -106,10 +97,7 @@ describe('group routes', () => {
+     assert.equal(res.result.group[0].id, case2Id)
+   })
+ 
+-<<<<<<< HEAD
+-  it('DELETE /group/{id}', async () => {
+-=======
+-  it(`PUT /group/${case2Id} rejects unknown permission controls`, async () => {
++  it('PUT /group/{id} rejects unknown permission controls', async () => {
+     const res = await server.inject({
+       method: 'PUT',
+       url: `/group/${case2Id}`,
+@@ -119,8 +107,7 @@ describe('group routes', () => {
+     assert.equal(res.statusCode, 400)
+   })
+ 
+-  it(`DELETE /group/${case2Id}`, async () => {
+->>>>>>> refs/nt/pr/61
++  it('DELETE /group/{id}', async () => {
+     const res = await server.inject({
+       method: 'DELETE',
+       url: `/group/${case2Id}`,
+diff --git a/routes/index.js b/routes/index.js
+index 9649a55..f869392 100644
+--- a/routes/index.js
++++ b/routes/index.js
+@@ -109,7 +109,6 @@ async function setup() {
+ 
+   server.auth.default('nt_jwt_strategy')
+ 
+-<<<<<<< HEAD
+   server.ext('onPreResponse', (request, h) => {
+     const response = request.response
+     if (!(response instanceof StoreConflictError) && response?.code !== 'STORE_CONFLICT') {
+@@ -124,9 +123,8 @@ async function setup() {
+       })
+       .code(409)
+   })
+-=======
++
+   await server.register(authzPlugin)
+->>>>>>> refs/nt/pr/61
+ 
+   server.route({
+     method: 'GET',
+diff --git a/routes/nameserver.test.js b/routes/nameserver.test.js
+index e158b87..797a8ec 100644
+--- a/routes/nameserver.test.js
++++ b/routes/nameserver.test.js
+@@ -12,35 +12,22 @@ import userCase from './test/user.json' with { type: 'json' }
+ import nsCase from './test/nameserver.json' with { type: 'json' }
+ 
+ let server
+-<<<<<<< HEAD
+ let case2Id
+-
+-before(async () => {
+-  await Group.create(groupCase, { ifExists: 'return' })
+-  await User.create(userCase, { ifExists: 'return' })
+-  await Nameserver.create(nsCase, { ifExists: 'return' })
+-=======
+-let case2Id = 4094
+ const moveGroup = { id: 4090, parent_gid: groupCase.id, name: 'ns-move.route.example.com' }
+ 
+ before(async () => {
+-  await Nameserver.destroy({ id: case2Id })
+-  await Group.create(groupCase)
++  await Group.destroy({ id: moveGroup.id })
++  await Group.create(groupCase, { ifExists: 'return' })
+   await Group.create(moveGroup)
+-  await User.create(userCase)
++  await User.create(userCase, { ifExists: 'return' })
+   await grantGroupPermissions(groupCase.id)
+-  await Nameserver.create(nsCase)
+->>>>>>> refs/nt/pr/61
++  await Nameserver.create(nsCase, { ifExists: 'return' })
+   server = await init()
+ })
+ 
+ after(async () => {
+-<<<<<<< HEAD
+   if (case2Id) await Nameserver.destroy({ id: case2Id })
+-=======
+-  await Nameserver.destroy({ id: case2Id })
+   await Group.destroy({ id: moveGroup.id })
+->>>>>>> refs/nt/pr/61
+   await server.stop()
+ })
+ 
+@@ -71,9 +58,6 @@ describe('nameserver routes', () => {
+     assert.equal(res.result.nameserver[0].name, nsCase.name)
+   })
+ 
+-<<<<<<< HEAD
+-  it('POST /nameserver allocates an id', async () => {
+-=======
+   it(`PUT /nameserver/${nsCase.id} moves it to another group`, async () => {
+     const moved = await server.inject({
+       method: 'PUT',
+@@ -94,8 +78,7 @@ describe('nameserver routes', () => {
+     assert.equal(restored.result.nameserver[0].gid, groupCase.id)
+   })
+ 
+-  it(`POST /nameserver (${case2Id})`, async () => {
+->>>>>>> refs/nt/pr/61
++  it('POST /nameserver allocates an id', async () => {
+     const testCase = JSON.parse(JSON.stringify(nsCase))
+     delete testCase.id
+     testCase.name = 'c.ns.example.com.'
+diff --git a/routes/permission.test.js b/routes/permission.test.js
+index c2a7265..b5fed28 100644
+--- a/routes/permission.test.js
++++ b/routes/permission.test.js
+@@ -19,10 +19,24 @@ before(async () => {
+   await Group.create(groupCase, { ifExists: 'return' })
+   await User.create(userCase, { ifExists: 'return' })
+   await Permission.create(permCase, { ifExists: 'return' })
++  await Permission.put({ id: permCase.id, user_write: 1 })
++  await User.destroy({ id: targetId })
++  await Group.destroy({ id: targetId })
++  await Group.create({ ...groupCase, id: targetId, parent_gid: groupCase.id, name: 'permission-target' })
++  await User.create({
++    ...userCase,
++    id: targetId,
++    gid: targetId,
++    username: 'permission-target',
++    email: 'permission-target@example.com',
++  })
+ })
+ 
+ after(async () => {
+   if (case2Id !== undefined) await Permission.destroy({ id: case2Id })
++  await Permission.put({ id: permCase.id, user_write: 0 })
++  await User.destroy({ id: targetId })
++  await Group.destroy({ id: targetId })
+   await server.stop()
+ })
+ 
+@@ -53,18 +67,50 @@ describe('permission routes', () => {
+     assert.equal(res.result.permission.nameserver.create, false)
+   })
+ 
+-<<<<<<< HEAD
++  it('POST /permission cannot create your own permissions', async () => {
++    const testCase = JSON.parse(JSON.stringify(permCase))
++    delete testCase.id
++
++    const res = await server.inject({
++      method: 'POST',
++      url: '/permission',
++      headers: auth.headers,
++      payload: testCase,
++    })
++    assert.equal(res.statusCode, 403)
++    assert.match(res.result.error_msg, /own permissions/)
++  })
++
++  it(`PUT /permission/${permCase.id} cannot change your own permissions`, async () => {
++    const payload = { ...permCase }
++    delete payload.id
++    const res = await server.inject({
++      method: 'PUT',
++      url: `/permission/${permCase.id}`,
++      headers: auth.headers,
++      payload,
++    })
++    assert.equal(res.statusCode, 403)
++    assert.match(res.result.error_msg, /own permissions/)
++  })
++
++  it(`DELETE /permission/${permCase.id} cannot delete your own permissions`, async () => {
++    const res = await server.inject({
++      method: 'DELETE',
++      url: `/permission/${permCase.id}`,
++      headers: auth.headers,
++    })
++    assert.equal(res.statusCode, 403)
++    assert.match(res.result.error_msg, /own permissions/)
++  })
++
+   it('POST /permission allocates an id', async () => {
+     const testCase = JSON.parse(JSON.stringify(permCase))
+     delete testCase.id
+     testCase.user.id = targetId
+     testCase.group.id = targetId
+-    testCase.name = `Route Test Permission 2`
++    testCase.name = 'Route Test Permission 2'
+     delete testCase.deleted
+-=======
+-  it('POST /permission cannot create your own permissions', async () => {
+-    const testCase = JSON.parse(JSON.stringify(permCase))
+->>>>>>> refs/nt/pr/61
+ 
+     const res = await server.inject({
+       method: 'POST',
+@@ -72,7 +118,6 @@ describe('permission routes', () => {
+       headers: auth.headers,
+       payload: testCase,
+     })
+-<<<<<<< HEAD
+     assert.equal(res.statusCode, 201)
+     assert.equal(res.result.permission.name, 'Route Test Permission 2')
+     assert.equal(res.result.permission.zone.create, true)
+@@ -103,35 +148,21 @@ describe('permission routes', () => {
+   })
+ 
+   it('GET /permission/{id}', async () => {
+-=======
+-    assert.equal(res.statusCode, 403)
+-    assert.match(res.result.error_msg, /own permissions/)
+-  })
+-
+-  it(`PUT /permission/${userCase.id} cannot change your own permissions`, async () => {
+->>>>>>> refs/nt/pr/61
+     const res = await server.inject({
+-      method: 'PUT',
+-      url: `/permission/${userCase.id}`,
++      method: 'GET',
++      url: `/permission/${case2Id}`,
+       headers: auth.headers,
+-      payload: permCase,
+     })
+-    assert.equal(res.statusCode, 403)
+-    assert.match(res.result.error_msg, /own permissions/)
++    assert.equal(res.statusCode, 200)
++    assert.ok(res.result.permission)
+   })
+ 
+-<<<<<<< HEAD
+   it('DELETE /permission/{id}', async () => {
+-=======
+-  it(`DELETE /permission/${userCase.id} cannot delete your own permissions`, async () => {
+->>>>>>> refs/nt/pr/61
+     const res = await server.inject({
+       method: 'DELETE',
+-      url: `/permission/${userCase.id}`,
++      url: `/permission/${case2Id}`,
+       headers: auth.headers,
+     })
+-<<<<<<< HEAD
+-    // console.log(res.result)
+     assert.equal(res.statusCode, 200)
+   })
+ 
+@@ -141,7 +172,6 @@ describe('permission routes', () => {
+       url: `/permission/${case2Id}`,
+       headers: auth.headers,
+     })
+-    // console.log(res.result)
+     assert.equal(res.statusCode, 404)
+   })
+ 
+@@ -151,8 +181,6 @@ describe('permission routes', () => {
+       url: `/permission/${case2Id}`,
+       headers: auth.headers,
+     })
+-    // console.log(res.result)
+-    // assert.equal(res.statusCode, 200)
+     assert.equal(res.result.permission, undefined)
+   })
+ 
+@@ -162,13 +190,8 @@ describe('permission routes', () => {
+       url: `/permission/${case2Id}?deleted=true`,
+       headers: auth.headers,
+     })
+-    // console.log(res.result)
+     assert.equal(res.statusCode, 200)
+     assert.ok(res.result.permission)
+-=======
+-    assert.equal(res.statusCode, 403)
+-    assert.match(res.result.error_msg, /own permissions/)
+->>>>>>> refs/nt/pr/61
+   })
+ 
+   it('DELETE /session', async () => {
+diff --git a/routes/user.test.js b/routes/user.test.js
+index 0b2e010..22ba1d5 100644
+--- a/routes/user.test.js
++++ b/routes/user.test.js
+@@ -15,32 +15,21 @@ import userCase from './test/user.json' with { type: 'json' }
+ let server,
+   auth = { headers: {} },
+   sessionId
++let userId2
++const moveGroup = { id: 4090, parent_gid: groupCase.id, name: 'user-move.route.example.com' }
+ 
+ before(async () => {
+   server = await init()
+-<<<<<<< HEAD
++  await Group.destroy({ id: moveGroup.id })
+   await Group.create(groupCase, { ifExists: 'return' })
+-  await User.create(userCase, { ifExists: 'return' })
+-})
+-
+-let userId2
+-
+-after(async () => {
+-  if (userId2) await User.destroy({ id: userId2 })
+-=======
+-  await Group.create(groupCase)
+   await Group.create(moveGroup)
+-  await User.create(userCase)
++  await User.create(userCase, { ifExists: 'return' })
+   await grantGroupPermissions(groupCase.id)
+ })
+ 
+-const userId2 = 4094
+-const moveGroup = { id: 4090, parent_gid: groupCase.id, name: 'user-move.route.example.com' }
+-
+ after(async () => {
+-  await User.destroy({ id: userId2 })
++  if (userId2) await User.destroy({ id: userId2 })
+   await Group.destroy({ id: moveGroup.id })
+->>>>>>> refs/nt/pr/61
+   await server.stop()
+ })
+ 
+@@ -134,9 +123,17 @@ describe('user routes', () => {
+     assert.ok(Number.isInteger(userId2))
+   })
+ 
+-<<<<<<< HEAD
+   it('PUT /user/{id} keeps using the route id', async () => {
+-=======
++    const res = await server.inject({
++      method: 'PUT',
++      url: `/user/${userId2}`,
++      headers: auth.headers,
++      payload: { first_name: 'Updated' },
++    })
++    assert.equal(res.statusCode, 200)
++    assert.equal(res.result.user[0].first_name, 'Updated')
++  })
++
+   it('GET /user searches and paginates', async () => {
+     const res = await server.inject({
+       method: 'GET',
+@@ -153,7 +150,7 @@ describe('user routes', () => {
+     assert.equal(res.result.meta.pagination.offset, 0)
+   })
+ 
+-  it(`PUT /user/${userId2} moves it to another group`, async () => {
++  it('PUT /user/{id} moves it to another group', async () => {
+     const moved = await server.inject({
+       method: 'PUT',
+       url: `/user/${userId2}`,
+@@ -196,28 +193,17 @@ describe('user routes', () => {
+     assert.equal((await Authz.permissionRecord(restoredPermission.id)).target_gid, groupCase.id)
+   })
+ 
+-  it(`PUT /user/${userId2} rejects unknown permission controls`, async () => {
+->>>>>>> refs/nt/pr/61
++  it('PUT /user/{id} rejects unknown permission controls', async () => {
+     const res = await server.inject({
+       method: 'PUT',
+       url: `/user/${userId2}`,
+       headers: auth.headers,
+-<<<<<<< HEAD
+-      payload: { first_name: 'Updated' },
+-    })
+-    assert.equal(res.statusCode, 200)
+-    assert.equal(res.result.user[0].first_name, 'Updated')
+-  })
+-
+-  it('GET /user/{id}', async () => {
+-=======
+       payload: { definitely_not_a_permission: true },
+     })
+     assert.equal(res.statusCode, 400)
+   })
+ 
+-  it(`GET /user/${userId2}`, async () => {
+->>>>>>> refs/nt/pr/61
++  it('GET /user/{id}', async () => {
+     const res = await server.inject({
+       method: 'GET',
+       url: `/user/${userId2}`,
+diff --git a/routes/zone.js b/routes/zone.js
+index b991087..3aa8d1f 100644
+--- a/routes/zone.js
++++ b/routes/zone.js
+@@ -218,18 +218,14 @@ function ZoneRoutes(server) {
+           return h.response({ meta: { api: meta.api, msg: `I couldn't find that zone` } }).code(404)
+         }
+ 
+-<<<<<<< HEAD
+-        await Zone.put({ ...request.payload, id })
+-=======
+         const unusable = await unusableNameservers(request)
+         if (unusable.length) return nameserversNotUsable(h, unusable)
+->>>>>>> refs/nt/pr/61
+ 
+         const payload = Object.fromEntries(
+           Object.entries(request.payload).filter(([key]) => ZONE_PUT_FIELDS.has(key)),
+         )
+         try {
+-          await Zone.put({ id, ...payload })
++          await Zone.put({ ...payload, id })
+         } catch (err) {
+           if (err instanceof ZoneNameConflictError) return zoneNameConflict(h)
+           throw err
+diff --git a/routes/zone.test.js b/routes/zone.test.js
+index c090461..87518f4 100644
+--- a/routes/zone.test.js
++++ b/routes/zone.test.js
+@@ -14,56 +14,38 @@ import nsCase from './test/zone.json' with { type: 'json' }
+ import nameserverCase from './test/nameserver.json' with { type: 'json' }
+ 
+ let server
+-<<<<<<< HEAD
+ let case2Id
+-=======
+-let case2Id = 4094
+-const duplicateId = 4092
+-const duplicateCaseId = 4089
+-const concurrentDuplicateIds = [4087, 4088]
++let nsZoneId
++const moveGroup = { id: 4094, parent_gid: groupCase.id, name: 'zone-move.route.example.com' }
+ const recoveryDuplicateId = 4086
+->>>>>>> refs/nt/pr/61
+ 
+ const subGroup = { id: 4090, parent_gid: groupCase.id, name: 'sub.route.example.com' }
+ const subZone = { ...nsCase, id: 4091, gid: subGroup.id, zone: 'sub.route.example.com.' }
+ // one nameserver in the caller's group, one it cannot use
+ const ownNs = { ...nameserverCase, id: 4093, gid: groupCase.id, name: 'own.ns.example.com.' }
+ const otherNs = { ...nameserverCase, id: 4092, gid: 1, name: 'other.ns.example.com.' }
+-const nsZoneId = 4089
+-const refusedZoneId = 4085
+ 
+ before(async () => {
+   await Zone.destroy({ id: nsCase.id })
+-<<<<<<< HEAD
+-=======
+-  await Zone.destroy({ id: case2Id })
+-  await Zone.destroy({ id: duplicateId })
+-  await Zone.destroy({ id: duplicateCaseId })
+   await Zone.destroy({ id: recoveryDuplicateId })
+-  for (const id of concurrentDuplicateIds) await Zone.destroy({ id })
+->>>>>>> refs/nt/pr/61
++  for (const name of ['route2.example.com.', 'ns.route.example.com.', 'concurrent.example.com.']) {
++    for (const deleted of [false, true]) {
++      for (const zone of await Zone.get({ zone: name, deleted })) await Zone.destroy({ id: zone.id })
++    }
++  }
+   await Zone.destroy({ id: subZone.id })
+   // Destroy the subgroup before recreating it: a lingering row would make
+   // Group.create early-return and skip addToSubgroups, leaving the
+   // nt_group_subgroups closure row (and thus the include_subgroups query) empty.
+   await Group.destroy({ id: subGroup.id })
+-<<<<<<< HEAD
++  await Group.destroy({ id: moveGroup.id })
+   await Group.create(groupCase, { ifExists: 'return' })
++  await Group.create(moveGroup)
+   await User.create(userCase, { ifExists: 'return' })
+-  await Zone.create(nsCase, { ifExists: 'return' })
+-=======
+-  await Group.create(groupCase)
+-  // POST /zone (case2Id) targets a zone in this group; authz requires it to
+-  // exist inside the fixture user's group tree.
+-  await Group.create({ id: case2Id, parent_gid: groupCase.id, name: 'route2.example.com' })
+-  await User.create(userCase)
+   await grantGroupPermissions(groupCase.id)
+-  await Zone.create(nsCase)
+->>>>>>> refs/nt/pr/61
++  await Zone.create(nsCase, { ifExists: 'return' })
+   await Group.create(subGroup)
+   await Zone.create(subZone)
+-  await Zone.destroy({ id: nsZoneId })
+-  await Zone.destroy({ id: refusedZoneId })
+   await Nameserver.destroy({ id: ownNs.id })
+   await Nameserver.destroy({ id: otherNs.id })
+   await Nameserver.create(ownNs)
+@@ -72,20 +54,14 @@ before(async () => {
+ })
+ 
+ after(async () => {
+-<<<<<<< HEAD
+   if (case2Id) await Zone.destroy({ id: case2Id })
+-=======
+-  await Zone.destroy({ id: nsZoneId })
++  if (nsZoneId) await Zone.destroy({ id: nsZoneId })
+   await Nameserver.destroy({ id: ownNs.id })
+   await Nameserver.destroy({ id: otherNs.id })
+-  await Zone.destroy({ id: duplicateId })
+-  await Zone.destroy({ id: duplicateCaseId })
+   await Zone.destroy({ id: recoveryDuplicateId })
+-  for (const id of concurrentDuplicateIds) await Zone.destroy({ id })
+->>>>>>> refs/nt/pr/61
+   await Zone.destroy({ id: subZone.id })
+   await Group.destroy({ id: subGroup.id })
+-  await Group.destroy({ id: case2Id })
++  await Group.destroy({ id: moveGroup.id })
+   await server.stop()
+ })
+ 
+@@ -126,11 +102,9 @@ describe('zone routes', () => {
+     assert.ok(res.result.zone.some((z) => z.zone === nsCase.zone))
+   })
+ 
+-<<<<<<< HEAD
+-  it('POST /zone allocates an id', async () => {
+-=======
+   it('POST /zone rejects an active duplicate name', async () => {
+-    const duplicate = { ...nsCase, id: duplicateId, zone: `${nsCase.zone}.` }
++    const duplicate = { ...nsCase, zone: `${nsCase.zone}.` }
++    delete duplicate.id
+     const res = await server.inject({
+       method: 'POST',
+       url: '/zone',
+@@ -144,13 +118,14 @@ describe('zone routes', () => {
+   })
+ 
+   it('POST /zone rejects a case-only duplicate name', async () => {
++    const duplicate = { ...nsCase, zone: `${nsCase.zone.toUpperCase()}.` }
++    delete duplicate.id
+     const res = await server.inject({
+       method: 'POST',
+       url: '/zone',
+       headers: auth.headers,
+-      payload: { ...nsCase, id: duplicateCaseId, zone: `${nsCase.zone.toUpperCase()}.` },
++      payload: duplicate,
+     })
+-    await Zone.destroy({ id: duplicateCaseId })
+ 
+     assert.equal(res.statusCode, 409)
+     assert.deepEqual(res.result.zone, [])
+@@ -158,20 +133,19 @@ describe('zone routes', () => {
+ 
+   it('POST /zone admits only one concurrent canonical name', async () => {
+     const responses = await Promise.all(
+-      concurrentDuplicateIds.map((id, index) =>
+-        server.inject({
++      ['concurrent.example.com', 'CONCURRENT.EXAMPLE.COM.'].map((zone) => {
++        const payload = { ...nsCase, zone }
++        delete payload.id
++        return server.inject({
+           method: 'POST',
+           url: '/zone',
+           headers: auth.headers,
+-          payload: {
+-            ...nsCase,
+-            id,
+-            zone: index === 0 ? 'concurrent.example.com' : 'CONCURRENT.EXAMPLE.COM.',
+-          },
+-        }),
+-      ),
++          payload,
++        })
++      }),
+     )
+-    for (const id of concurrentDuplicateIds) await Zone.destroy({ id })
++    const created = responses.find((res) => res.statusCode === 201)
++    if (created) await Zone.destroy({ id: created.result.zone[0].id })
+ 
+     assert.deepEqual(responses.map((res) => res.statusCode).sort(), [201, 409])
+   })
+@@ -200,10 +174,10 @@ describe('zone routes', () => {
+       method: 'PUT',
+       url: `/zone/${nsCase.id}`,
+       headers: auth.headers,
+-      payload: { gid: case2Id },
++      payload: { gid: moveGroup.id },
+     })
+     assert.equal(moved.statusCode, 200)
+-    assert.equal(moved.result.zone[0].gid, case2Id)
++    assert.equal(moved.result.zone[0].gid, moveGroup.id)
+ 
+     const restored = await server.inject({
+       method: 'PUT',
+@@ -271,33 +245,37 @@ describe('zone routes', () => {
+     assert.deepEqual(res.result.zone[0].nameservers, [])
+   })
+ 
+-  it(`POST /zone (${nsZoneId}) with nameservers`, async () => {
++  it('POST /zone with nameservers', async () => {
++    const payload = { ...nsCase, zone: 'ns.route.example.com.', nameservers: [ownNs.id] }
++    delete payload.id
+     const res = await server.inject({
+       method: 'POST',
+       url: '/zone',
+       headers: auth.headers,
+-      payload: { ...nsCase, id: nsZoneId, zone: 'ns.route.example.com.', nameservers: [ownNs.id] },
++      payload,
+     })
+     assert.equal(res.statusCode, 201)
+     assert.deepEqual(res.result.zone[0].nameservers, [ownNs.id])
++    nsZoneId = res.result.zone[0].id
+   })
+ 
+   it('POST /zone rejects a nameserver the caller cannot use', async () => {
++    const payload = { ...nsCase, zone: 'ns2.route.example.com.', nameservers: [otherNs.id] }
++    delete payload.id
+     const res = await server.inject({
+       method: 'POST',
+       url: '/zone',
+       headers: auth.headers,
+-      payload: { ...nsCase, id: refusedZoneId, zone: 'ns2.route.example.com.', nameservers: [otherNs.id] },
++      payload,
+     })
+     assert.equal(res.statusCode, 403)
+-    assert.equal((await Zone.get({ id: refusedZoneId })).length, 0)
++    assert.equal((await Zone.get({ zone: payload.zone })).length, 0)
+   })
+ 
+-  it(`POST /zone (${case2Id})`, async () => {
+->>>>>>> refs/nt/pr/61
++  it('POST /zone allocates an id', async () => {
+     const testCase = JSON.parse(JSON.stringify(nsCase))
+     delete testCase.id
+-    testCase.gid = groupCase.id
++    testCase.gid = moveGroup.id
+     testCase.zone = 'route2.example.com.'
+ 
+     const res = await server.inject({
+@@ -311,19 +289,16 @@ describe('zone routes', () => {
+     assert.equal(res.result.zone.length, 1)
+     assert.equal(res.result.zone[0].zone, 'route2.example.com.')
+     assert.ok(res.result.zone[0].gid)
+-<<<<<<< HEAD
+     case2Id = res.result.zone[0].id
+     assert.ok(Number.isInteger(case2Id))
+-=======
+ 
+     const log = await server.inject({
+       method: 'GET',
+-      url: `/log/zone?gid=${case2Id}&search=route2.example.com.`,
++      url: `/log/zone?gid=${moveGroup.id}&search=route2.example.com.`,
+       headers: auth.headers,
+     })
+     assert.equal(log.statusCode, 200)
+     assert.equal(log.result.log[0].action, 'added')
+->>>>>>> refs/nt/pr/61
+   })
+ 
+   it('PUT /zone/{id} keeps using the route id', async () => {
+@@ -359,7 +334,7 @@ describe('zone routes', () => {
+ 
+     const log = await server.inject({
+       method: 'GET',
+-      url: `/log/zone?gid=${case2Id}&search=route2.example.com.`,
++      url: `/log/zone?gid=${moveGroup.id}&search=route2.example.com.`,
+       headers: auth.headers,
+     })
+     assert.equal(log.statusCode, 200)
+diff --git a/routes/zone_record.test.js b/routes/zone_record.test.js
+index 2791240..b4d0aca 100644
+--- a/routes/zone_record.test.js
++++ b/routes/zone_record.test.js
+@@ -19,15 +19,12 @@ const createdZoneRecordIds = []
+ const testGroupId = 5094
+ const testZoneId = 5095
+ const testZoneRecordId = 5096
+-<<<<<<< HEAD
+-const bystanderId = 5097
+-=======
+ const deletedParentRecordId = 5097
+ const delegatedGroupId = 5098
+ const delegatedZoneId = 5099
+ const delegatedRecordId = 5100
+ const hiddenRecordId = 5101
+->>>>>>> refs/nt/pr/61
++const bystanderId = 5102
+ 
+ const testZone = {
+   ...zoneCase,
+@@ -90,9 +87,9 @@ before(async () => {
+     username: `route-zr-delete-${testGroupId}`,
+   }
+ 
+-<<<<<<< HEAD
+   await Group.create(testGroup, { ifExists: 'return' })
+   await User.create(testUser, { ifExists: 'return' })
++  await grantGroupPermissions(testGroup.id)
+   await Zone.create(testZone)
+   await ZoneRecord.create(testZoneRecord)
+   await ZoneRecord.create({
+@@ -100,12 +97,7 @@ before(async () => {
+     id: bystanderId,
+     owner: 'bystander.route-zr-delete.example.com.',
+     address: '203.0.113.9',
+-=======
+-  await Group.create(testGroup)
+-  await User.create(testUser)
+-  await grantGroupPermissions(testGroup.id)
+-  await Zone.create(testZone)
+-  await ZoneRecord.create(testZoneRecord)
++  })
+   await ZoneRecord.create(deletedParentRecord)
+   await Group.create({
+     ...groupCase,
+@@ -121,7 +113,6 @@ before(async () => {
+     type: 'ZONERECORD',
+     delegated_by_id: testGroupId,
+     delegated_by_name: `route-zr-delete-${testGroupId}`,
+->>>>>>> refs/nt/pr/61
+   })
+ 
+   server = await init()
+@@ -137,11 +128,8 @@ after(async () => {
+     await ZoneRecord.destroy({ id })
+   }
+   await ZoneRecord.destroy({ id: testZoneRecordId })
+-<<<<<<< HEAD
+   await ZoneRecord.destroy({ id: bystanderId })
+-=======
+   await ZoneRecord.destroy({ id: deletedParentRecordId })
+->>>>>>> refs/nt/pr/61
+   await Zone.destroy({ id: testZoneId })
+   if (server) await server.stop()
+ })
+@@ -196,7 +184,6 @@ describe('zone_record routes', () => {
+     createdZoneRecordIds.push(res.result.zone_record[0].id)
+   })
+ 
+-<<<<<<< HEAD
+   it('PUT /zone_record/{id} keeps using the route id', async () => {
+     const id = createdZoneRecordIds[0]
+     const res = await server.inject({
+@@ -208,7 +195,8 @@ describe('zone_record routes', () => {
+ 
+     assert.equal(res.statusCode, 200)
+     assert.equal(res.result.zone_record[0].description, 'updated')
+-=======
++  })
++
+   it('limits a delegated zone collection to delegated records', async () => {
+     const zones = await server.inject({
+       method: 'GET',
+@@ -235,7 +223,6 @@ describe('zone_record routes', () => {
+     )
+     assert.equal(records.result.meta.pagination.total, 1)
+     assert.equal(records.result.meta.pagination.filtered, 1)
+->>>>>>> refs/nt/pr/61
+   })
+ 
+   it('POST /zone_record accepts omitted ttl and stores 0', async () => {

@@ -109,7 +109,7 @@ esac
 
     def test_test_all_runs_every_suite_in_order(self):
         output = make_dry_run("test-all")
-        order = [output.find(m) for m in ("api npm test", "for backend in mysql json toml", "NICTOOL_DATA_PROTOCOL=rest", "NICTOOL_DATA_PROTOCOL=soap")]
+        order = [output.find(m) for m in ("api npm test", "for backend in mysql json toml", "server npm test", "v3-e2e", "NICTOOL_DATA_PROTOCOL=soap", "NICTOOL_DATA_PROTOCOL=rest")]
 
         self.assertTrue(all(pos >= 0 for pos in order), output)
         self.assertEqual(order, sorted(order))
