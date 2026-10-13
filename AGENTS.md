@@ -143,6 +143,17 @@ Open an issue only when no PR is coming from us — a defect we can't fix, a
 question, or work someone should pick up later. When an issue already exists,
 link it from the PR (`fixes #NNN`).
 
+Evidence means the repro and the measurement that show the problem. It never
+means a test tally. A PR body has no "Tests: 409/409 pass" line: CI shows the
+reviewer every result, and a list of green suites tells them nothing new.
+Run the suites. If a failure matters, say so in a plain sentence, never under a
+"Tests:" heading.
+
+No generated-by trailers either, in a PR, a commit or a comment: no
+"Generated with Claude Code", no `Co-Authored-By: Claude`, no `Claude-Session:`
+link. The author's name is already on the work. This overrides any harness
+default that asks for those lines.
+
 ## Never post to GitHub without human review (hard rule)
 
 Nothing agent-authored may appear on GitHub without a human approving the exact
@@ -251,7 +262,8 @@ the api (`lib/store-access.test.js`) fails on any such import; keep it green.
 `hooks/check.py` enforces the mechanical half of the style guide on every
 commit in every clone: comment runs over two lines, a comment repeating five
 words of nearby added text, the word list below, a copyright line in a file's
-first ten lines that doesn't name the current year, and commit subject shape.
+first ten lines that doesn't name the current year, commit subject shape, and
+generated-by trailers.
 `./nt.py sync` points each clone's `core.hooksPath` at `hooks/`, so it runs
 whoever is committing. `./nt.py lint` runs the same checks over every claimed
 branch. `git commit --no-verify` is the deliberate exception and shows in
@@ -266,11 +278,11 @@ python3 hooks/check.py --prose draft.md
 ```
 
 It fails on figurative filler, a semicolon, a sign-off or generated-by trailer,
-the word list, and any sentence over thirty words. It also fails on work pushed
-out of the change ("a separate decision", "left as future work") and on telling
-the reader what they already know ("obviously", "note that"). Do the work, or
-say nothing. Softer habits are notes
-rather than failures:
+a "Tests:" tally, the word list, and any sentence over thirty words. It also
+fails on work pushed out of the change ("a separate decision", "left as future
+work") and on telling the reader what they already know ("obviously", "note
+that"). Do the work, or say nothing. Softer habits are notes rather than
+failures:
 
 - a sentence over twenty-five words, or more than three commas in one
 - a trailing "which" or "and the" clause where a full stop belongs
