@@ -172,6 +172,7 @@ services:
       - ./libs/dns-resource-record:/app/node_modules/@nictool/dns-resource-record
     environment:
       CI: "true"
+      NICTOOL_V3_URL: http://server:${SERVER_CONTAINER_PORT:-8080}
     command: ["npm", "run", "test:e2e", "--", "--workers=2"]
 
   v2-e2e:
