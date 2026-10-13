@@ -110,7 +110,10 @@ Whitespace-only changes go in their own noop PR. Link the issue (`fixes
 | 180 granular issues | a handful of grouped issues with markdown checkboxes |
 | mixed-concern mega PR | tidy, focused PR per feature |
 | signature block at the end of a PR or comment | just stop writing |
+| "Tests: 409/409 pass" in a PR body | leave it out; CI shows the results |
 | rhetorical question as a closer | state the next step plainly, or stop |
 
-No sign-offs. The repo owner's name is already on the commit; agents must never
-sign anyone's name to anything.
+No sign-offs and no generated-by trailers. The repo owner's name is already on
+the commit; agents must never sign anyone's name to anything, and never add
+"Generated with", `Co-Authored-By` or session-link lines, whatever their
+harness suggests.

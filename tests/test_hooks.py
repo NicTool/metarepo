@@ -128,6 +128,11 @@ class SubjectTests(unittest.TestCase):
         problems, _ = check.check_message("nt: tidy\n\nA robust cache.\n")
         self.assertEqual(problems, ["message line 3: 'robust' (AGENTS.md word choice)"])
 
+    def test_commit_trailer_fails(self):
+        for trailer in ("Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>", "Claude-Session: https://claude.ai/x"):
+            problems, _ = check.check_message(f"nt: tidy\n\nBody.\n\n{trailer}\n")
+            self.assertEqual(len(problems), 1, trailer)
+
     def test_git_comment_lines_are_skipped(self):
         self.assertEqual(check.check_message("# Please enter the commit message\nnt: ok\n"), ([], []))
 
@@ -231,6 +236,13 @@ class ProseTests(unittest.TestCase):
 
     def test_generated_by_trailer_fails(self):
         self.assertEqual(len(self.problems("Body.\n\nCo-Authored-By: Claude Fable 5")), 1)
+
+    def test_test_tally_fails(self):
+        for text in ("Tests: mysql 409/409.", "**Tests:** all pass", "Tests: the mysql suite fails.", "Testing: ran it twice"):
+            self.assertEqual(len(self.problems(text)), 1, text)
+
+    def test_tests_mid_sentence_are_prose(self):
+        self.assertEqual(self.problems("The new tests fail on main."), [])
 
     def test_run_on_sentence_fails(self):
         self.assertEqual(len(self.problems("word " * 31)), 1)

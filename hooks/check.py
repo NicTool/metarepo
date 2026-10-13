@@ -55,12 +55,15 @@ FIGURATIVE = (
 )
 FIGURATIVE_RE = re.compile(r"(?<![\w-])(" + "|".join(map(re.escape, FIGURATIVE)) + r")(?![\w-])", re.IGNORECASE)
 
-# Sign-offs and generated-by trailers. The guide: "just stop writing", and
-# agents must never sign anyone's name to anything.
+# Sign-offs and generated-by trailers, in commits and in prose. The guide:
+# "just stop writing", and agents must never sign anyone's name to anything.
 SIGNOFF_RE = re.compile(
-    r"(generated with \[?claude|co-authored-by:\s*claude|\U0001F916|^-- $|^~[A-Z][a-z]+$)",
+    r"(generated with \[?claude|co-authored-by:\s*claude|claude-session:|\U0001F916|^-- $|^~[A-Z][a-z]+$)",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# A "Tests: 409/409 pass" tally repeats what CI already shows the reviewer.
+TEST_TALLY_RE = re.compile(r"^\s*(\*\*|__)?(tests?|testing|test results|verification)(\*\*|__)?\s*:", re.IGNORECASE)
 
 # Matt's own prose has no clause-joining semicolon: 937 commit-message lines and
 # both corpus files yield only ";-)" and pasted SQL. Winks stay legal.
@@ -263,6 +266,8 @@ def check_message(message: str) -> tuple[list[str], list[str]]:
         if m := BANNED_RE.search(text):
             problems.append(f"message line {lineno}: '{m.group(1)}' (AGENTS.md word choice)")
             break
+    if m := SIGNOFF_RE.search("\n".join(lines)):
+        problems.append(f"generated-by trailer: '{m.group(0).strip()}'; leave it out")
     return problems, notes
 
 
@@ -287,6 +292,8 @@ def check_prose(text: str) -> tuple[list[str], list[str]]:
         problems.append(f"sign-off or generated-by trailer: '{m.group(0).strip()}'; just stop writing")
 
     for lineno, line in prose_lines(text):
+        if TEST_TALLY_RE.match(line):
+            problems.append(f"line {lineno}: a 'Tests:' line; CI shows results, so state any failure that matters in a plain sentence")
         for m in BANNED_RE.finditer(line):
             problems.append(f"line {lineno}: '{m.group(1)}' (AGENTS.md word choice)")
         for m in FIGURATIVE_RE.finditer(line):
