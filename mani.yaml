@@ -69,7 +69,7 @@ projects:
     tags: [v3, lib]
     env:
       pin: main
-      train: 69
+      train: 70
 
   research:
     path: research

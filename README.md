@@ -116,7 +116,7 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 ## Unreleased member integration
 
 `mani.yaml` declares trains for api#70, #61, and #68, NicTool#365, server#8,
-and dns-resource-record#69, including the draft API PRs. A fresh workspace can
+and dns-resource-record#70, including the draft API PRs. A fresh workspace can
 assemble the integration branches without recording a personal fork:
 
 ```sh

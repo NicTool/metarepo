@@ -38,10 +38,10 @@ index 725fdd2..f8c75d7 100644
 -        run: npm install --no-save ${{ env.NICTOOL_VALIDATE_SPEC }}
        - run: sh test/run.sh
 diff --git a/.github/workflows/coverage.yml b/.github/workflows/coverage.yml
-index 98510ff..b917d7d 100644
+index 98510ff..ca0aa54 100644
 --- a/.github/workflows/coverage.yml
 +++ b/.github/workflows/coverage.yml
-@@ -6,19 +6,11 @@ on:
+@@ -6,48 +6,12 @@ on:
    push:
      branches: [main]
  
@@ -50,58 +50,71 @@ index 98510ff..b917d7d 100644
 -
  jobs:
    coverage:
-     runs-on: ubuntu-latest
+-    runs-on: ubuntu-latest
++    uses: NicTool/.github/.github/workflows/coverage.yml@main
++    secrets: inherit
      permissions:
        contents: read
 -<<<<<<< HEAD
--    with:
--      mysql: true
--      data-stores: mysql,json
+     with:
+       mysql: true
+       data-stores: mysql,json
 -=======
-     steps:
-       - name: Start MySQL
-         run: sudo /etc/init.d/mysql start
-@@ -27,8 +19,6 @@ jobs:
-         with:
-           node-version: lts/*
-       - run: npm install
+-    steps:
+-      - name: Start MySQL
+-        run: sudo /etc/init.d/mysql start
+-      - uses: actions/checkout@v6
+-      - uses: actions/setup-node@v6
+-        with:
+-          node-version: lts/*
+-      - run: npm install
 -      - name: Install proposed validate source
 -        run: npm install --no-save ${{ env.NICTOOL_VALIDATE_SPEC }}
-       - name: Initialize MySQL
-         run: sh sql/init-mysql.sh
-       - name: Measure each store
-@@ -50,4 +40,3 @@ jobs:
-         uses: coverallsapp/github-action@master
-         with:
-           github-token: ${{ secrets.github_token }}
+-      - name: Initialize MySQL
+-        run: sh sql/init-mysql.sh
+-      - name: Measure each store
+-        env:
+-          NODE_ENV: cov
+-        run: |
+-          for store in json mysql; do
+-            NICTOOL_DATA_STORE=$store npm run test:coverage:lcov
+-            cp coverage/lcov.info coverage/lcov-$store.info
+-          done
+-      - name: codecov
+-        uses: codecov/codecov-action@v5
+-        with:
+-          token: ${{ secrets.CODECOV_TOKEN }}
+-          files: ./coverage/lcov-json.info,./coverage/lcov-mysql.info
+-          disable_search: true
+-          fail_ci_if_error: true
+-      - name: Coveralls
+-        uses: coverallsapp/github-action@master
+-        with:
+-          github-token: ${{ secrets.github_token }}
 ->>>>>>> refs/nt/pr/61
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index 77f2407..d527e89 100644
+index 184452c..ad86d81 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
-@@ -1,4 +1,5 @@
- # Changelog
-+- sql: seed nameserver export types on upgrade (#72)
- 
- The format is based on [Keep a Changelog](https://keepachangelog.com/).
- 
-@@ -6,11 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
+@@ -6,12 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
  
  ### Unreleased
  
 -<<<<<<< HEAD
  - fix: reject create conflicts and duplicate permission targets
  - create: allocate ids internally and reject caller-supplied ids
--- fix(sql): seed ns export types coredns & native for 2.x upgrade
+ - fix(sql): seed ns export types coredns & native for 2.x upgrade
+-- fix: server stop waits for the stores to disconnect
 -=======
  - audit: enforce route-specific queries and file-store exact matching
  - session: validate qualified usernames and permission responses
  - user: add subgroup group-name sorting and reject unknown writes
-@@ -18,7 +16,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
+@@ -19,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
  - authz: a group change needs the owning tree, delegates edit in place
  - zone_record: sort by the legacy rdata columns
  - session: a failed activity touch no longer rejects unhandled
 ->>>>>>> refs/nt/pr/61
++- fix: server stop waits for the stores to disconnect
  
  ### [3.0.3] - 2026-07-27
  
