@@ -68,8 +68,7 @@ projects:
     desc: v3 resource record types
     tags: [v3, lib]
     env:
-      pin: main
-      train: 70
+      pin: v2.0.0
 
   research:
     path: research

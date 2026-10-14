@@ -25,9 +25,9 @@ keys are:
 - `train` — an optional ordered list of upstream PRs for a temporary
   integration branch
 
-`mani.yaml` temporarily declares trains for NicTool#365, api#61, and server#8.
-It follows validate and dns-zone `main` for merged changes that are not in a
-release yet. Run `./nt.py train` to assemble the open PRs for integration
+`mani.yaml` temporarily declares trains for NicTool#365, api#70, #61, and
+#68, and server#8. It follows dns-zone `main` for merged changes that are not
+in a release yet. Run `./nt.py train` to assemble the open PRs for integration
 testing; do not use the resulting `train/*` branches as bases for unrelated
 work. Remove each train after its PR is merged, and restore release pins after
 the maintainers publish releases.
@@ -195,9 +195,14 @@ personal state, and a PR is only opened after the gate.
 4. Draft the upstream PR title and body, then follow the human-review gate
    above before running
    `gh pr create --repo NicTool/<repo> --head <fork-owner>:<branch> --base <default>`.
-5. After the PR is squash-merged, delete the branch and start any follow-up
+5. Copilot reviews every upstream PR within minutes of it opening. Read that
+   review the same day. Push a fix for each real finding, and draft a reply
+   for each one you dispute. In October 2026 the maintainer fixed three
+   Copilot findings on our PRs before merging them (api#76, #78, #79).
+   That is work we handed the maintainer.
+6. After the PR is squash-merged, delete the branch and start any follow-up
    from a fresh default branch.
-6. After an upstream release is published, update the applicable `mani.yaml`
+7. After an upstream release is published, update the applicable `mani.yaml`
    pin in a separate metarepo change. A merged commit on `main` is not a
    release tag.
 

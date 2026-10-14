@@ -9,7 +9,6 @@ TEMPORARY_TRAINS = {
     "NicTool": ("master", 365),
     "api": ("main", "70 61 68"),
     "server": ("main", 8),
-    "dns-resource-record": ("main", 70),
 }
 UNRELEASED_MAIN_PINS = ("dns-zone",)
 
