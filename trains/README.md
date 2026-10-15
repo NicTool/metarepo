@@ -7,9 +7,8 @@ Each JSON file records the PR head and the tree immediately before its patch.
 For a conflicted merge, that is the preceding train commit's tree. For a clean
 merge, it is the completed merge's tree. Changed inputs stop the train.
 
-API #61 keeps #70's server-owned IDs, serialized file allocation, and conflict
-checks while adding the REST bridge. It also supplies record zone IDs in
-delegation responses. API #68 adds the delegation edge introduced by #61.
+API #68 cascades each file-store destroy() before main's mutate() removes the
+row.
 NicTool #365 uses today's serial date in its test fixture.
 
 To refresh a conflicted merge, resolve it in the member's train branch and save
