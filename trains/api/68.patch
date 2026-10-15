@@ -1,246 +1,71 @@
-diff --git a/lib/delegation/store/base.js b/lib/delegation/store/base.js
-index 15ccf6c..7a45ce0 100644
---- a/lib/delegation/store/base.js
-+++ b/lib/delegation/store/base.js
-@@ -10,6 +10,7 @@
-  *   getDelegates(oid, type, gid?) → object[]  (groups holding a delegation)
-  *   put(args)               → true | null  (null when nothing to update)
-  *   delete(args)            → true | null
-+ *   cascadeKeys(gid)        → { gid, oid, type }[]
-  *   writeLog(data, action)  → void
-  */
- export const PERM_FIELDS = [
-@@ -41,6 +42,10 @@ class DelegationBase {
-     throw new Error('delete() not implemented by this store')
-   }
- 
-+  async cascadeKeys(_gid) {
-+    throw new Error('cascadeKeys() not implemented by this store')
-+  }
-+
-   async writeLog(_data, _action) {
-     throw new Error('writeLog() not implemented by this store')
-   }
-diff --git a/lib/delegation/store/file.js b/lib/delegation/store/file.js
-index bedf0e9..9fac2db 100644
---- a/lib/delegation/store/file.js
-+++ b/lib/delegation/store/file.js
-@@ -149,6 +149,12 @@ class DelegationRepoFile extends DelegationBase {
-     return true
-   }
- 
-+  async cascadeKeys(gid) {
-+    return (await this._load())
-+      .filter((row) => row.gid === gid)
-+      .map((row) => ({ gid: row.gid, oid: row.oid, type: row.type }))
-+  }
-+
-   async writeLog(data, action) {
-     await this.logFile.update('delegate_log', (logs) =>
-       logs.push({
-diff --git a/lib/delegation/store/mysql.js b/lib/delegation/store/mysql.js
-index 7dc29fd..185cf46 100644
---- a/lib/delegation/store/mysql.js
-+++ b/lib/delegation/store/mysql.js
-@@ -180,6 +180,15 @@ class DelegationRepoMysql extends DelegationBase {
-     return true
-   }
- 
-+  async cascadeKeys(gid) {
-+    return Mysql.execute(
-+      `SELECT nt_group_id AS gid, nt_object_id AS oid, nt_object_type AS type
-+       FROM nt_delegate
-+       WHERE nt_group_id = ? AND deleted = 0`,
-+      [gid],
-+    )
-+  }
-+
-   async writeLog(data, action) {
-     const row = {
-       nt_user_id: data.delegated_by_id ?? 0,
 diff --git a/lib/group/store/file.js b/lib/group/store/file.js
-index cd99e30..a06f7e8 100644
+index b73782d..43961c9 100644
 --- a/lib/group/store/file.js
 +++ b/lib/group/store/file.js
-@@ -2,23 +2,10 @@ import FileStore, { nextId } from '../../store/file.js'
- import { idConflict } from '../../store/error.js'
- import PermissionRepoFile, { permissionRecord } from '../../permission/store/file.js'
+@@ -152,17 +152,9 @@ class GroupRepoFile extends GroupBase {
+   }
  
--import GroupBase from './base.js'
--
+   async destroy(args) {
 -<<<<<<< HEAD
+-    return this.file.mutate('group', (groups) => removeRows(groups, (g) => g.id === args.id) > 0)
 -=======
- import { cascade } from '../../references.js'
- 
--const defaultPermissions = {
--  inherit: false,
--  self_write: false,
--  group: { create: false, write: false, delete: false },
--  nameserver: { usable: [], create: false, write: false, delete: false },
--  zone: { create: false, write: false, delete: false, delegate: false },
--  zonerecord: { create: false, write: false, delete: false, delegate: false },
--  user: { create: false, write: false, delete: false },
--}
-+import GroupBase from './base.js'
- 
+-    const groups = await this._load()
+-    const before = groups.length
+-    const filtered = groups.filter((g) => g.id !== args.id)
+-    if (filtered.length === before) return false
++    if (!(await this._load()).some((g) => g.id === args.id)) return false
+     await cascade('group', args.id)
+-    await this._save(filtered)
+-    return true
 ->>>>>>> refs/nt/pr/68
- class GroupRepoFile extends GroupBase {
-   constructor(args = {}) {
-     super(args)
-diff --git a/lib/references.js b/lib/references.js
-index 2748d81..cd40d99 100644
---- a/lib/references.js
-+++ b/lib/references.js
-@@ -1,6 +1,7 @@
- // What a hard delete takes with it. mysql enforces each of these with a
- // FOREIGN KEY; the file stores have none, so their destroy() calls cascade().
- const cascades = [
-+  { parent: 'group', child: 'delegation', via: 'gid', keys: 'cascadeKeys' },
-   { parent: 'group', child: 'nameserver', via: 'gid' },
-   { parent: 'user', child: 'session', via: 'uid' },
-   { parent: 'zone', child: 'zone_record', via: 'zid' },
-@@ -9,6 +10,7 @@ const cascades = [
- // Imported when a cascade runs, so a child store loading its own parent does
- // not close a circle at module load.
- const childStores = {
-+  delegation: () => import('./delegation/index.js'),
-   nameserver: () => import('./nameserver/index.js'),
-   session: () => import('./session/index.js'),
-   zone_record: () => import('./zone_record/index.js'),
-@@ -18,6 +20,11 @@ export async function cascade(parent, id) {
-   for (const edge of cascades.filter((e) => e.parent === parent)) {
-     const store = (await childStores[edge.child]()).default
- 
-+    if (edge.keys) {
-+      for (const key of await store[edge.keys](id)) await store.delete(key)
-+      continue
-+    }
-+
-     // Session alone has no destroy(); its delete() is the hard one and clears
-     // every session for the parent in a single call.
-     if (typeof store.destroy !== 'function') {
-diff --git a/lib/references.test.js b/lib/references.test.js
-index 1d40262..25b1a0e 100644
---- a/lib/references.test.js
-+++ b/lib/references.test.js
-@@ -4,6 +4,7 @@ import { after, before, describe, it } from 'node:test'
- import { storeType } from './config.js'
- import cascades from './references.js'
- 
-+import Delegation from './delegation/index.js'
- import Group from './group/index.js'
- import Nameserver from './nameserver/index.js'
- import Session from './session/index.js'
-@@ -19,9 +20,15 @@ const ids = {
-   nameserver: [47104, 47114, 47124],
-   session: [47105, 47115, 47125],
-   zone_record: [47106, 47116, 47126],
-+  delegation: [47107, 47117, 47127],
++    return this.file.mutate('group', (groups) => removeRows(groups, (g) => g.id === args.id) > 0)
+   }
  }
  
- const entities = {
-+  delegation: {
-+    store: Delegation,
-+    body: (id) => ({ gid: GID, oid: id, type: 'ZONE', perm_write: true }),
-+    identity: ({ gid, oid, type }) => ({ gid, oid, type }),
-+  },
-   group: { store: Group, body: (id) => ({ id, parent_gid: 0, name: `g${id}.refgraph.test` }) },
-   user: {
-     store: User,
-@@ -67,24 +74,30 @@ const rows = (found) => [found].flat().filter(Boolean).length
+diff --git a/lib/user/store/file.js b/lib/user/store/file.js
+index e8bb603..b146b41 100644
+--- a/lib/user/store/file.js
++++ b/lib/user/store/file.js
+@@ -206,17 +206,9 @@ class UserRepoFile extends UserBase {
+   }
  
- async function present(name, id) {
-   const { store } = entities[name]
--  if (!softDeletes(name)) return rows(await store.get({ id }))
-+  const key = typeof id === 'object' ? id : { id }
-+  if (!softDeletes(name)) return rows(await store.get(key))
-   let n = 0
--  for (const deleted of [false, true]) n += rows(await store.get({ id, deleted }))
-+  for (const deleted of [false, true]) n += rows(await store.get({ ...key, deleted }))
-   return n
+   async destroy(args) {
+-<<<<<<< HEAD
+-    return this.file.mutate('user', (users) => removeRows(users, (u) => u.id === args.id) > 0)
+-=======
+-    const users = await this._load()
+-    const before = users.length
+-    const filtered = users.filter((u) => u.id !== args.id)
+-    if (filtered.length === before) return false
++    if (!(await this._load()).some((u) => u.id === args.id)) return false
+     await cascade('user', args.id)
+-    await this._save(filtered)
+-    return true
+->>>>>>> refs/nt/pr/68
++    return this.file.mutate('user', (users) => removeRows(users, (u) => u.id === args.id) > 0)
+   }
  }
- 
- async function remove(name, id) {
-   const { store } = entities[name]
--  return softDeletes(name) ? store.destroy({ id }) : store.delete({ id })
-+  const key = typeof id === 'object' ? id : { id }
-+  return softDeletes(name) ? store.destroy(key) : Boolean(await store.delete(key))
- }
- 
- // A store may allocate its own id, so seed() reports the one it used.
- async function seed(name, body) {
-   const returned = await entities[name].store.create(body)
-+  if (entities[name].identity) return entities[name].identity(body)
-   return Number.isInteger(returned) ? returned : body.id
- }
- 
- async function reset() {
-+  for (const gid of ids.group) {
-+    for (const oid of ids.delegation) await Delegation.delete({ gid, oid, type: 'ZONE' })
-+  }
-   for (const uid of ids.user) await Session.delete({ uid })
-   for (const name of ['zone_record', 'session', 'zone', 'nameserver', 'user', 'group']) {
-     for (const id of ids[name]) await remove(name, id)
-@@ -102,13 +115,20 @@ describe('cascade graph', () => {
-   it('declares the edges the constraints enforce', () => {
-     assert.deepEqual(
-       cascades.map((e) => `${e.parent} -> ${e.child}`).sort(),
--      ['group -> nameserver', 'user -> session', 'zone -> zone_record'],
-+      ['group -> delegation', 'group -> nameserver', 'user -> session', 'zone -> zone_record'],
-       'an edge was added or dropped; the file stores follow this list',
-     )
-     for (const edge of cascades) {
-       assert.ok(entities[edge.parent], `no fixture for parent ${edge.parent}`)
-       assert.ok(entities[edge.child], `no fixture for child ${edge.child}`)
-       assert.ok(edge.via, `${edge.parent} -> ${edge.child} declares no via`)
-+      if (edge.keys) {
-+        assert.equal(
-+          typeof entities[edge.child].store[edge.keys],
-+          'function',
-+          `${edge.parent} -> ${edge.child} has no ${edge.keys} method`,
-+        )
-+      }
-     }
-   })
  
 diff --git a/lib/zone/store/file.js b/lib/zone/store/file.js
-index 39b6039..bf8e01d 100644
+index d1a36ae..07e314e 100644
 --- a/lib/zone/store/file.js
 +++ b/lib/zone/store/file.js
-@@ -1,10 +1,10 @@
- import FileStore, { nextId, resolveCodec } from '../../store/file.js'
- import { idConflict } from '../../store/error.js'
+@@ -156,7 +156,8 @@ class ZoneRepoFile extends ZoneBase {
+   }
  
--import ZoneBase, { canonicalZoneName, ZoneNameConflictError } from './base.js'
--
- import { cascade } from '../../references.js'
- 
-+import ZoneBase, { canonicalZoneName, ZoneNameConflictError } from './base.js'
-+
- const zoneDefaults = { minimum: 3600, ttl: 3600, refresh: 86400, retry: 7200, expire: 1209600 }
- let zoneWriteQueue = Promise.resolve()
- 
-@@ -222,6 +222,7 @@ class ZoneRepoFile extends ZoneBase {
-       const before = zones.length
-       const filtered = zones.filter((z) => z.id !== args.id)
-       if (filtered.length === before) return false
-+      await cascade('zone', args.id)
-       await this._save(filtered)
-       await this._replaceNs(args.id, [])
-       return true
-@@ -247,7 +248,6 @@ class ZoneRepoFile extends ZoneBase {
-   async nameserversFor(zid) {
-     const mappings = await new FileStore('zone_nameserver').load('zone_nameserver')
-     const zones = await this._load()
+   async destroy(args) {
 -<<<<<<< HEAD
-     const nameservers = await new FileStore('nameserver').load('nameserver')
++    if (!(await this._load()).some((z) => z.id === args.id)) return false
++    await cascade('zone', args.id)
+     return this.file.mutate('zone', (zones) => removeRows(zones, (z) => z.id === args.id) > 0)
+   }
  
-     return mappings
-@@ -259,14 +259,6 @@ class ZoneRepoFile extends ZoneBase {
+@@ -175,15 +176,6 @@ class ZoneRepoFile extends ZoneBase {
        }))
        .filter((row) => row.name !== undefined)
        .sort((a, b) => (a.name < b.name ? -1 : 1))
 -=======
+-    const zones = await this._load()
 -    const before = zones.length
 -    const filtered = zones.filter((z) => z.id !== args.id)
 -    if (filtered.length === before) return false

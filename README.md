@@ -115,20 +115,19 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 
 ## Unreleased member integration
 
-`mani.yaml` declares trains for api#70, #61, and #68, NicTool#365, and
-server#8, including the draft API PRs. A fresh workspace can
-assemble the integration branches without recording a personal fork:
+`mani.yaml` declares trains for api#68, NicTool#365, and server#8. A fresh
+workspace can assemble the integration branches without recording a personal
+fork:
 
 ```sh
 make init
 make train
 ```
 
-The trains apply the patches in `trains/`. API patches resolve overlapping PRs.
-The NicTool patch removes a fixed-date serial test fixture. Each patch
-checks the preceding tree and PR head before applying. If either changes,
+The trains apply the patches in `trains/`. The API patch ports #68 onto main's
+file store. The NicTool patch removes a fixed-date serial test fixture. Each
+patch checks the preceding tree and PR head before applying. If either changes,
 `make train` stops for a new resolution. Existing feature branches remain intact.
-The API and v3 UI mount the record library train directly.
 
 The api depends on `@nictool/validate` `^1.0.1`. Compose mounts the manifest's
 v1.0.1 checkout over the installed copy. dns-zone still follows `main` for

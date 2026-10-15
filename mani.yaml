@@ -27,7 +27,7 @@ projects:
     tags: [v3, app]
     env:
       pin: main
-      train: 70 61 68
+      train: 68
 
   server:
     path: server
