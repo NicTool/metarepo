@@ -125,9 +125,9 @@ make train
 ```
 
 The trains apply the patches in `trains/`. The API patch ports #68 onto main's
-file store. The NicTool patch removes a fixed-date serial test fixture. Each
-patch checks the preceding tree and PR head before applying. If either changes,
-`make train` stops for a new resolution. Existing feature branches remain intact.
+file store. Each patch checks the preceding tree and PR head before applying. If
+either changes, `make train` stops for a new resolution. Existing feature
+branches remain intact.
 
 The api depends on `@nictool/validate` `^1.0.1`. Compose mounts the manifest's
 v1.0.1 checkout over the installed copy. dns-zone still follows `main` for
