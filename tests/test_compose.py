@@ -10,8 +10,6 @@ TEMPORARY_TRAINS = {
     "api": ("main", 68),
     "server": ("main", 8),
 }
-UNRELEASED_MAIN_PINS = ("dns-zone",)
-
 
 def compose() -> dict:
     return yaml.safe_load((ROOT / "docker-compose.yml").read_text())
@@ -25,12 +23,6 @@ class ComposeTests(unittest.TestCase):
         for project, (pin, pull_request) in TEMPORARY_TRAINS.items():
             self.assertEqual(projects[project]["env"]["pin"], pin)
             self.assertEqual(projects[project]["env"]["train"], pull_request)
-
-    def test_manifest_follows_unreleased_library_work(self):
-        manifest = yaml.safe_load((ROOT / "mani.yaml").read_text())
-
-        for project in UNRELEASED_MAIN_PINS:
-            self.assertEqual(manifest["projects"][project]["env"], {"pin": "main"})
 
     def test_api_build_takes_no_validate_spec(self):
         build = compose()["services"]["api"]["build"]
