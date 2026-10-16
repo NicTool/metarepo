@@ -115,7 +115,7 @@ at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
 
 ## Unreleased member integration
 
-`mani.yaml` declares trains for api#68, NicTool#365, and server#8. A fresh
+`mani.yaml` declares trains for NicTool#365 and server#8. A fresh
 workspace can assemble the integration branches without recording a personal
 fork:
 
