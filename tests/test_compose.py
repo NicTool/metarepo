@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.58.2-noble"
 TEMPORARY_TRAINS = {
     "NicTool": ("master", 365),
-    "api": ("main", 68),
     "server": ("main", 8),
 }
 

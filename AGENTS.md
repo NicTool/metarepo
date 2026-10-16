@@ -25,11 +25,11 @@ keys are:
 - `train` — an optional ordered list of upstream PRs for a temporary
   integration branch
 
-`mani.yaml` temporarily declares trains for NicTool#365, api#68, and
-server#8. Run `./nt.py train` to assemble the open PRs for integration
-testing; do not use the resulting `train/*` branches as bases for unrelated
-work. Remove each train after its PR is merged, and restore release pins after
-the maintainers publish releases.
+`mani.yaml` temporarily declares trains for NicTool#365 and server#8. api
+follows `main` until its next release. Run `./nt.py train` to assemble the
+open PRs for integration testing; do not use the resulting `train/*` branches
+as bases for unrelated work. Remove each train after its PR is merged, and
+restore release pins after the maintainers publish releases.
 
 ## Tool ownership
 
