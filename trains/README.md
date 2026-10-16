@@ -1,14 +1,12 @@
 # train patches
 
-`nt.py train` fetches PR heads and merges them in manifest order. These patches
-resolve the API overlaps.
+`nt.py train` fetches PR heads and merges them in manifest order. A patch here
+resolves an overlap between two of them, or between a PR and main. None is
+needed today.
 
 Each JSON file records the PR head and the tree immediately before its patch.
 For a conflicted merge, that is the preceding train commit's tree. For a clean
 merge, it is the completed merge's tree. Changed inputs stop the train.
-
-API #68 cascades each file-store destroy() before main's mutate() removes the
-row.
 
 To refresh a conflicted merge, resolve it in the member's train branch and save
 `git diff --binary AUTO_MERGE` as its patch. For a clean merge, save the fix with
