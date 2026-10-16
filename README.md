@@ -129,9 +129,7 @@ and PR head before applying. If either changes, `make train` stops for a new
 resolution. Existing feature branches remain intact.
 
 The api depends on `@nictool/validate` `^1.0.1`. Compose mounts the manifest's
-v1.0.1 checkout over the installed copy. dns-zone still follows `main` for
-unreleased changes. Remove trains after their PRs merge and restore release
-pins when those changes ship.
+v1.0.1 checkout over the installed copy. Remove trains after their PRs merge.
 
 The v3 browser targets select the Playwright image matching the installed
 server package, including when an older dependency volume is reused.

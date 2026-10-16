@@ -52,7 +52,7 @@ projects:
     desc: v3 zone file parsing
     tags: [v3, lib]
     env:
-      pin: main
+      pin: v1.4.0
 
   dns-nameserver:
     path: libs/dns-nameserver
@@ -60,7 +60,7 @@ projects:
     desc: v3 nameserver management
     tags: [v3, lib]
     env:
-      pin: v0.10.1
+      pin: v0.11.0
 
   dns-resource-record:
     path: libs/dns-resource-record
