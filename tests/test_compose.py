@@ -10,6 +10,7 @@ TEMPORARY_TRAINS = {
     "server": ("main", 8),
 }
 
+
 def compose() -> dict:
     return yaml.safe_load((ROOT / "docker-compose.yml").read_text())
 
@@ -22,6 +23,13 @@ class ComposeTests(unittest.TestCase):
         for project, (pin, pull_request) in TEMPORARY_TRAINS.items():
             self.assertEqual(projects[project]["env"]["pin"], pin)
             self.assertEqual(projects[project]["env"]["train"], pull_request)
+
+    def test_libraries_pin_release_tags(self):
+        projects = yaml.safe_load((ROOT / "mani.yaml").read_text())["projects"]
+
+        for name, project in projects.items():
+            if "lib" in project.get("tags", []):
+                self.assertRegex(project["env"]["pin"], r"^v\d+\.\d+\.\d+$", name)
 
     def test_api_build_takes_no_validate_spec(self):
         build = compose()["services"]["api"]["build"]
