@@ -32,8 +32,14 @@ the bridge hides. Keep this list current, so the second kind gets fixed in v3.
 
 | Translation | Kind |
 |---|---|
-| v2's 301/302 answers for missing or bad ids, before any v3 call | v2 habit |
+| v2's 301/302 answers for missing or bad parameters, from v2's own table, before any v3 call | v2 habit |
+| v3's 400 as v2's 300 sanity error, and v3's 409s in v2's codes and words | v2 habit |
+| v2's wording for a failed login, and an empty session after logout | v2 habit |
 | A date serial for a new zone sent without one | v2 habit |
+| v2's SOA timer defaults for a new zone, and trailing dots stripped from its name | v2 habit |
+| `hostmaster.<zone>.` for a new zone sent without `mailaddr` | v3 gap: v3 stores NULL, then answers 500 |
+| `new_zone_record` with an existing id updates that record | v2 habit |
+| Record owners unqualified without regard to case | v2 habit |
 | Relative record owners and `@`/`&` targets qualified against the zone | v2 habit |
 | v2's packed NAPTR and SSHFP columns unpacked into RFC fields | v2 habit |
 | Delegation and group listings rebuilt from several v3 calls | v2 habit |

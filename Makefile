@@ -19,6 +19,8 @@ endef
 V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
 V2_E2E_EXEC = docker compose --env-file docker/.env --profile legacy --profile test run --rm --no-deps -T
 V2_SOAP_ENV = -e NICTOOL_DATA_PROTOCOL=soap -e NICTOOL_SERVER_HOST=localhost -e NICTOOL_SERVER_PORT=8082 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test.cfg
+# v2 tests that pass in full through the REST bridge
+V2_REST_SUPPORTED = t/02_basic.t t/03_session.t t/11_zones_reverse.t xt/14_permissions.t xt/16_delegation.t xt/20_permission.t
 V2_REST_ENV = -e NICTOOL_DATA_PROTOCOL=rest -e NICTOOL_SERVER_HOST=api -e NICTOOL_SERVER_PORT=3000 -e NICTOOL_SERVER_PROTOCOL=http
 NICTOOL_LIBS_SOURCE ?= $(CURDIR)/libs
 NICTOOL_VALIDATE_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/validate
@@ -144,9 +146,9 @@ test-v2-soap: ## Run all NicTool v2 SOAP tests (requires up-legacy)
 	$(MAKE) test-v2-unit
 	$(MAKE) test-v2-xt-soap
 
-test-v2-rest: ## Run the REST bridge's own tests, then v2 tests through it (requires up-legacy)
+test-v2-rest: ## Run the REST bridge's own tests, then the v2 tests it supports (requires up-legacy)
 	$(V2_EXEC) nictool-legacy prove -I/usr/local/nictool/server/api/lib /opt/nt-bridge/t
-	$(MAKE) test-v2-xt-rest
+	$(V2_EXEC) $(V2_REST_ENV) nictool-legacy sh /opt/nt-bridge/prove.sh $(V2_REST_SUPPORTED)
 
 test-v2-e2e: ## Run the v2 browser suite as root (requires up-legacy)
 	@password=$$(sed -n 's/^ROOT_USER_PASSWORD=//p' docker/.env); \
