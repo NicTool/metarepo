@@ -30,7 +30,8 @@ class V2TestTargetTests(unittest.TestCase):
         self.assertIn("NICTOOL_DATA_PROTOCOL=rest", output)
         self.assertIn("/opt/nt-bridge/t", output)
         self.assertIn(
-            "/opt/nt-bridge/prove.sh xt/14_permissions.t xt/16_delegation.t xt/20_permission.t",
+            "/opt/nt-bridge/prove.sh t/02_basic.t t/03_session.t t/11_zones_reverse.t"
+            " xt/14_permissions.t xt/16_delegation.t xt/20_permission.t",
             output,
         )
         self.assertNotIn("prove -v xt/*.t", output)

@@ -7,6 +7,7 @@ use warnings;
 use parent 'NicTool::Transport';
 use HTTP::Tiny;
 use JSON::PP;
+use NicTool::API;
 
 my $JSON = JSON::PP->new->utf8->allow_nonref;
 
@@ -270,6 +271,59 @@ my %ZR_V2_TO_RFC = map {
     $_ => { reverse %{ $ZR_RFC_TO_V2{$_} } }
 } keys %ZR_RFC_TO_V2;
 
+# v2's server refused a missing parameter with 301 and a bad id with 302 before
+# running anything. NicTool::API has that table; these entries fix where it lags.
+my %V2_PARAM_FIXES = (
+    edit_group                => { usable_nameservers => { empty => 1 } },
+    edit_user                 => { usable_nameservers => { type => 'NAMESERVER', list => 1, empty => 1 } },
+    edit_zone                 => { nameservers => { empty => 1 } },
+    new_zone                  => { nameservers => { empty => 1 } },
+    new_user                  => { password => { required => 1 }, password2 => { required => 1 } },
+    # the bridge reads an empty record name as the zone apex, which v2 refused
+    new_zone_record           => {
+        type              => { required => 1 },
+        name              => { required => 0 },
+        nt_zone_record_id => { type => 'ZONERECORD' },
+    },
+    get_group_permissions     => { nt_group_id => { required => 1, type => 'GROUP' } },
+    get_user_permissions      => { nt_user_id => { required => 1, type => 'USER' } },
+    get_usable_nameservers    => { nt_group_id => { type => 'GROUP' } },
+    get_zone_record_log_entry => { nt_zone_record_log_id => { required => 1 } },
+);
+
+sub _v2_verify_params {
+    my ( $action, $vars ) = @_;
+    my %params = %{ NicTool::API->parameters($action) || {} };
+    for my $p ( keys %{ $V2_PARAM_FIXES{$action} || {} } ) {
+        $params{$p} = { %{ $params{$p} || {} }, %{ $V2_PARAM_FIXES{$action}{$p} } };
+    }
+    my $params = \%params;
+    my @missing;
+    for my $p ( sort grep { $params->{$_}{required} } keys %$params ) {
+        my $v = $vars->{$p};
+        push @missing, $p
+            if !defined $v
+            || ( !ref $v && $v eq '' )
+            || ( $params->{$p}{list} && ( !_v2_split($v) || grep { !defined || $_ eq '' } _v2_split($v) ) );
+    }
+    return _v2_param_error( join( ' ', @missing ), 301 ) if @missing;
+
+    my @invalid;
+    for my $p ( sort grep { $params->{$_}{type} && exists $vars->{$_} } keys %$params ) {
+        my $v = $vars->{$p};
+        next if $params->{$p}{empty} && !grep { defined && $_ ne '' } _v2_split($v);
+        my @vals = $params->{$p}{list} ? _v2_split($v) : ($v);
+        push @invalid, $p if !@vals || grep { !defined || !/^\d+$/ || $_ == 0 } @vals;
+    }
+    return _v2_param_error( join( ' ', @invalid ), 302 ) if @invalid;
+    return;
+}
+
+sub _v2_split {
+    my $v = shift;
+    return ref $v eq 'ARRAY' ? @$v : split /,/, $v // '', -1;
+}
+
 sub _v2_param_error {
     my ($param, $code) = @_;
     return {
@@ -390,11 +444,11 @@ sub _unqualify_owner {
     (my $bare = $zone->{zone}) =~ s/\.$//;
     return unless $bare;
 
-    if ($owner eq "$bare.") {
+    if ( lc $owner eq lc "$bare." ) {
         $entity->{name} = '';
     }
     else {
-        $entity->{name} =~ s/\.\Q$bare\E\.$//;
+        $entity->{name} =~ s/\.\Q$bare\E\.$//i;
     }
 }
 
@@ -631,6 +685,21 @@ sub send_request {
     my $spec = $ACTION_MAP{$action};
     return _not_implemented($action) unless $spec;
 
+    if ( my $err = _v2_verify_params( $action, \%vars ) ) {
+        return $err;
+    }
+
+    # v2 let new_zone_record carry an existing id, and updated that record
+    if (   $action eq 'new_zone_record'
+        && defined $vars{nt_zone_record_id}
+        && length $vars{nt_zone_record_id} )
+    {
+        my $res = $self->send_request( $url, %vars, action => 'edit_zone_record',
+            nt_user_session => $session );
+        $res->{nt_zone_record_id} //= $vars{nt_zone_record_id} if ( $res->{error_code} // 0 ) == 200;
+        return $res;
+    }
+
     if ( ($spec->{synthesize} // '') eq 'group_branch' ) {
         return $self->_get_group_branch( $vars{nt_group_id} );
     }
@@ -806,8 +875,17 @@ sub send_request {
     }
 
     if ($action eq 'new_zone') {
+        $body{zone} =~ s/\.+$// if defined $body{zone};
         $body{serial} = _new_serial()
             unless defined $body{serial} && $body{serial} =~ /^\d+$/;
+
+        # v2 stored unset SOA timers as NULL and exported these in their place
+        my %soa = ( ttl => 86400, refresh => 16384, retry => 900, expire => 1048576, minimum => 2560 );
+        for ( keys %soa ) {
+            $body{$_} = $soa{$_} unless defined $body{$_} && length $body{$_};
+        }
+        $body{mailaddr} = "hostmaster.$body{zone}."
+            if defined $body{zone} && !( defined $body{mailaddr} && length $body{mailaddr} );
     }
     delete $body{zone} if $action eq 'edit_zone';
 
@@ -994,7 +1072,7 @@ sub send_request {
 
     # HTTP errors
     if ($resp->{status} >= 400) {
-        return _http_error($resp->{status}, $data);
+        return _v2_error( $action, _http_error($resp->{status}, $data) );
     }
     return _http_error( 502, { error => 'Expected a JSON object response' } )
         unless ref $data eq 'HASH';
@@ -1240,7 +1318,7 @@ sub _adapt_response {
 
     if ($action eq 'logout') {
         $self->_nt->{_rest_jwt_token} = undef;
-        return { error_code => 200, error_msg => 'OK' };
+        return { error_code => 200, error_msg => 'OK', nt_user_session => '' };
     }
 
     if ($action =~ /^(?:get_global_application_log|get_user_global_log|get_group_zones_log|get_zone_record_log|get_zone_record_log_entry)$/) {
@@ -1704,6 +1782,34 @@ sub _http_error {
         $msg = "REST: $msg";
     }
     return { error_code => $code, error_msg => $msg, error_desc => $desc };
+}
+
+# v3 refusals in the codes and words the v2 server used for the same refusal
+my @V2_CONFLICTS = (
+    [ qr/^REST: Cannot delete group: active (zones|users|subgroups) still exist/ =>
+        sub { ( 600, "You can't delete this group until you delete all of its "
+                . ( $_[0] eq 'subgroups' ? 'sub-groups' : $_[0] ) ) } ],
+    [ qr/^REST: zone \S+ already exists/ => sub { ( 300, 'Zone is already taken' ) } ],
+);
+
+sub _v2_error {
+    my ( $action, $err ) = @_;
+    my $code = $err->{error_code} // 0;
+
+    return { error_code => 403, error_msg => 'Invalid username and/or password.' }
+        if $action eq 'login' && $code == 401;
+
+    if ( $code == 400 || $code == 409 ) {
+        for my $conflict (@V2_CONFLICTS) {
+            my ( $re, $v2 ) = @$conflict;
+            my @match = $err->{error_msg} =~ $re or next;
+            my ( $v2_code, $msg ) = $v2->(@match);
+            return { error_code => $v2_code, error_msg => $msg,
+                error_desc => $v2_code == 600 ? 'Failure' : 'Sanity error' };
+        }
+        return { %$err, error_code => 300, error_desc => 'Sanity error' } if $code == 400;
+    }
+    return $err;
 }
 
 sub _flatten_permissions {

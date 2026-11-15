@@ -175,7 +175,7 @@ The v2 container has its own Perl test suites running inside the container again
 ```sh
 make test-v2          # all v2 unit and extended tests through SOAP
 make test-v2-soap     # explicit name for make test-v2
-make test-v2-rest     # REST bridge tests, then the supported extended tests through it
+make test-v2-rest     # REST bridge tests, then the v2 tests it supports
 make test-v2-e2e      # v2 browser suite
 make test-v2-unit     # server and client unit tests with SOAP defaults
 make test-v2-xt       # all extended tests through SOAP
@@ -183,9 +183,9 @@ make test-v2-xt-rest  # supported extended tests through the REST bridge
 ```
 
 `make test-v2` and `make test-v2-soap` run the server and client unit tests,
-then every extended ("xt") test through SOAP. The REST bridge target runs
-`xt/14_permissions.t`, `xt/16_delegation.t`, and `xt/20_permission.t` against
-the v3 api, through the bridge in `tools/v2-rest-bridge/`. Each target sets its endpoint,
+then every extended ("xt") test through SOAP. The REST bridge target runs the
+v2 tests that pass in full against the v3 api, through the bridge in
+`tools/v2-rest-bridge/`. `V2_REST_SUPPORTED` in the Makefile lists them. Each target sets its endpoint,
 protocol, and test config explicitly, regardless of the container defaults.
 The browser target runs in a pinned Playwright container, installs its node
 packages there, and logs in as the root user seeded from `docker/.env`. The
@@ -235,7 +235,7 @@ make stress-api RUNTIME=node:24 N=25  # repeat the API suite and retain each log
 make test-server  # run v3 server tests only (requires make up-ui)
 make test-libs    # run library tests (no running services needed)
 make test-v2       # run all v2 unit and extended tests through SOAP
-make test-v2-rest  # run the supported v2 extended tests through the REST bridge
+make test-v2-rest  # run the supported v2 tests through the REST bridge
 make test-v2-xt    # run all v2 extended tests through SOAP
 ```
 
