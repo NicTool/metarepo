@@ -165,12 +165,16 @@ sub record_body {
 
 is record_body(name => 'alias', type => 'CNAME', address => 'www')->{cname},
     'www.zone.com.', 'a relative CNAME target is qualified against the zone';
-is record_body(name => '@', type => 'MX', address => 'mail', weight => 10)->{exchange},
-    'mail.zone.com.', 'a relative MX target is qualified against the zone';
-is record_body(name => '@', type => 'NS', address => 'ns1')->{dname},
-    'ns1.zone.com.', 'a relative NS target is qualified against the zone';
-is record_body(name => '_sip._tcp', type => 'SRV', address => 'sip', other => 5060)->{target},
-    'sip.zone.com.', 'a relative SRV target is qualified against the zone';
+for my $type (qw(MX NS SRV)) {
+    my $rest = transport();
+    my $res  = $rest->send_request( 'http://api:3000', action => 'new_zone_record',
+        nt_zone_id => 5, name => '@', type => $type, address => 'mail', weight => 10 );
+    like "$res->{error_code} $res->{error_msg}", qr/^300 Address for $type must point to a FQDN/,
+        "a relative $type target is refused, as v2 did";
+    is scalar @{ $rest->{http}{requests} }, 0, "the relative $type target never reaches v3";
+}
+is record_body(name => '@', type => 'MX', address => 'mail.@', weight => 10)->{exchange},
+    'mail.zone.com.', 'the @ shortcut still stands for the zone in an MX target';
 is record_body(name => '2', type => 'PTR', address => 'host')->{dname},
     'host.zone.com.', 'a relative PTR target is qualified against the zone';
 
