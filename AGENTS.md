@@ -25,8 +25,8 @@ keys are:
 - `train` — an optional ordered list of upstream PRs for a temporary
   integration branch
 
-`mani.yaml` temporarily declares trains for NicTool#365 and server#8. api
-follows `main` until its next release. Run `./nt.py train` to assemble the
+`mani.yaml` temporarily declares a train for server#8. api follows `main`
+until its next release. Run `./nt.py train` to assemble the
 open PRs for integration testing; do not use the resulting `train/*` branches
 as bases for unrelated work. Remove each train after its PR is merged, and
 restore release pins after the maintainers publish releases.
@@ -349,9 +349,10 @@ missing. The db bakes credentials in at first initialization, so regenerating
 `.env` later orphans the existing `db-data` volume — wipe it (`make clean`)
 and let init run again rather than debugging access-denied errors.
 
-While the REST bridge PRs are in flight, `mani.yaml` declares their trains.
-README's "REST bridge integration" section covers the temporary settings and
-their removal.
+The REST bridge in `tools/v2-rest-bridge/` lets v2's own tests drive the v3
+api, so v2 shows what v3 still lacks. It belongs to this workspace and never
+goes upstream to NicTool. v2 runs it unmodified. Its README lists what the
+bridge papers over.
 
 ## Worktrees
 

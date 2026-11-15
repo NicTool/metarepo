@@ -28,22 +28,19 @@ class V2TestTargetTests(unittest.TestCase):
         output = make_dry_run("test-v2-rest")
 
         self.assertIn("NICTOOL_DATA_PROTOCOL=rest", output)
-        self.assertIn("NICTOOL_TEST_CFG=t/test-rest.cfg", output)
+        self.assertIn("/opt/nt-bridge/t", output)
         self.assertIn(
-            "prove -v xt/14_permissions.t xt/16_delegation.t xt/20_permission.t",
+            "/opt/nt-bridge/prove.sh xt/14_permissions.t xt/16_delegation.t xt/20_permission.t",
             output,
         )
         self.assertNotIn("prove -v xt/*.t", output)
 
-    def test_rest_browser_target_uses_generated_account_and_group(self):
-        output = make_dry_run("test-v2-e2e-rest")
+    def test_browser_target_runs_as_the_seeded_root(self):
+        output = make_dry_run("test-v2-e2e")
 
-        self.assertIn("username", output)
-        self.assertIn("password", output)
-        self.assertIn("test_gid", output)
-        self.assertIn('NICTOOL_TEST_USER="$user"', output)
+        self.assertIn("ROOT_USER_PASSWORD", output)
+        self.assertIn("NICTOOL_TEST_USER=root", output)
         self.assertIn('NICTOOL_TEST_PASSWORD="$password"', output)
-        self.assertIn('NICTOOL_TEST_GID="$test_gid"', output)
         self.assertIn("run --rm --no-deps -T", output)
         self.assertIn("v2-e2e", output)
         self.assertNotIn("cd NicTool/client/t/e2e", output)

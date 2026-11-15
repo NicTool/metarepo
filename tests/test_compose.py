@@ -6,7 +6,6 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.58.2-noble"
 TEMPORARY_TRAINS = {
-    "NicTool": ("master", 365),
     "server": ("main", 8),
 }
 
@@ -41,15 +40,15 @@ class ComposeTests(unittest.TestCase):
 
         self.assertIn("./libs/validate:/app/node_modules/@nictool/validate", volumes)
 
-    def test_legacy_gui_defaults_to_rest_against_the_api(self):
+    def test_legacy_gui_keeps_its_soap_defaults_and_mounts_the_bridge(self):
         legacy = compose()["services"]["nictool-legacy"]
         env = legacy["environment"]
 
-        self.assertEqual(env["NICTOOL_DATA_PROTOCOL"], "${NICTOOL_DATA_PROTOCOL:-rest}")
-        self.assertEqual(env["NICTOOL_SERVER_HOST"], "${NICTOOL_SERVER_HOST:-api}")
-        self.assertEqual(env["NICTOOL_SERVER_PORT"], "${NICTOOL_SERVER_PORT:-3000}")
+        for name in ("NICTOOL_DATA_PROTOCOL", "NICTOOL_SERVER_HOST", "NICTOOL_SERVER_PORT"):
+            self.assertNotIn(name, env)
         self.assertEqual(env["DB_PORT"], "3306")
         self.assertIn("api", legacy["depends_on"])
+        self.assertIn("./tools/v2-rest-bridge:/opt/nt-bridge:ro", legacy["volumes"])
 
     def test_legacy_waits_for_the_root_user_seed(self):
         services = compose()["services"]
