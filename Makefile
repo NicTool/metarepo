@@ -1,4 +1,4 @@
-.PHONY: help init env up up-ui up-legacy up-all down clean test test-all test-api test-api-backends stress-api test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e-rest test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
+.PHONY: help init env up up-ui up-legacy up-all down clean test test-all test-api test-api-backends stress-api test-server test-libs test-v2 test-v2-unit test-v2-soap test-v2-rest test-v2-e2e test-v2-xt test-v2-xt-soap test-v2-xt-rest logs sync status update train fork
 
 SHELL := bash
 
@@ -19,7 +19,7 @@ endef
 V2_EXEC = docker compose --env-file docker/.env --profile legacy exec -T
 V2_E2E_EXEC = docker compose --env-file docker/.env --profile legacy --profile test run --rm --no-deps -T
 V2_SOAP_ENV = -e NICTOOL_DATA_PROTOCOL=soap -e NICTOOL_SERVER_HOST=localhost -e NICTOOL_SERVER_PORT=8082 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test.cfg
-V2_REST_ENV = -e NICTOOL_DATA_PROTOCOL=rest -e NICTOOL_SERVER_HOST=api -e NICTOOL_SERVER_PORT=3000 -e NICTOOL_SERVER_PROTOCOL=http -e NICTOOL_TEST_CFG=t/test-rest.cfg
+V2_REST_ENV = -e NICTOOL_DATA_PROTOCOL=rest -e NICTOOL_SERVER_HOST=api -e NICTOOL_SERVER_PORT=3000 -e NICTOOL_SERVER_PROTOCOL=http
 NICTOOL_LIBS_SOURCE ?= $(CURDIR)/libs
 NICTOOL_VALIDATE_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/validate
 NICTOOL_DNS_ZONE_SOURCE ?= $(NICTOOL_LIBS_SOURCE)/dns-zone
@@ -77,7 +77,7 @@ clean: env ## Stop all and remove volumes
 
 test: test-api test-libs ## Run v3 API + library tests (requires make up)
 
-test-all: test test-api-backends test-server test-v3-e2e test-v2-unit test-v2-rest test-v2-xt test-v2-e2e-rest test-v3-e2e-live ## Every suite, v3 and v2, in order (requires make up-all)
+test-all: test test-api-backends test-server test-v3-e2e test-v2-unit test-v2-rest test-v2-xt test-v2-e2e test-v3-e2e-live ## Every suite, v3 and v2, in order (requires make up-all)
 
 test-api: ## Run API tests (requires make up)
 	@$(call node_suite,docker compose --env-file docker/.env exec -T api npm test)
@@ -101,9 +101,9 @@ test-v3-e2e: ## Run v3 browser tests (requires make up-ui)
 
 .PHONY: test-v3-e2e-live
 test-v3-e2e-live: ## Test v3 login and reads against the live API (requires make up-all)
-	@user=$$(sed -n "s/^[[:space:]]*username[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
-	password=$$(sed -n "s/^[[:space:]]*password[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
-	test -n "$$user" && test -n "$$password" || { echo 'REST test credentials are missing; recreate nictool-legacy' >&2; exit 1; }; \
+	@user=$$(sed -n "s/^[[:space:]]*username[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test.cfg); \
+	password=$$(sed -n "s/^[[:space:]]*password[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test.cfg); \
+	test -n "$$user" && test -n "$$password" || { echo 'test credentials are missing; recreate nictool-legacy' >&2; exit 1; }; \
 	version=$$(docker compose --env-file docker/.env --profile ui exec -T server node -p 'require("@playwright/test/package.json").version') && \
 	NICTOOL_V3_PLAYWRIGHT_VERSION="$$version" $(V2_E2E_EXEC) -e NICTOOL_TEST_USER="$$user" -e NICTOOL_TEST_PASSWORD="$$password" \
 		v3-e2e npx playwright test --config workspace-e2e/playwright.config.mjs
@@ -137,28 +137,21 @@ test-v2-unit: ## Run NicTool v2 unit tests with SOAP defaults (requires up-legac
 test-v2-xt-soap: ## Run all NicTool v2 extended tests through SOAP (requires up-legacy)
 	$(V2_EXEC) $(V2_SOAP_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && prove -v xt/*.t'
 
-test-v2-xt-rest: ## Run the supported NicTool v2 extended tests through REST (requires up-legacy)
-	$(V2_EXEC) $(V2_REST_ENV) nictool-legacy bash -c 'cd /usr/local/nictool/server && prove -v xt/14_permissions.t xt/16_delegation.t xt/20_permission.t'
+test-v2-xt-rest: ## Run the supported NicTool v2 extended tests through the REST bridge (requires up-legacy)
+	$(V2_EXEC) $(V2_REST_ENV) nictool-legacy sh /opt/nt-bridge/prove.sh xt/14_permissions.t xt/16_delegation.t xt/20_permission.t
 
 test-v2-soap: ## Run all NicTool v2 SOAP tests (requires up-legacy)
 	$(MAKE) test-v2-unit
 	$(MAKE) test-v2-xt-soap
 
-test-v2-rest: ## Run the NicTool v2 REST bridge tests (requires up-legacy)
+test-v2-rest: ## Run the REST bridge's own tests, then v2 tests through it (requires up-legacy)
+	$(V2_EXEC) nictool-legacy prove -I/usr/local/nictool/server/api/lib /opt/nt-bridge/t
 	$(MAKE) test-v2-xt-rest
 
-test-v2-e2e-rest: ## Run the v2 browser suite through REST (requires up-legacy)
-	@user=$$(sed -n "s/^[[:space:]]*username[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
-	password=$$(sed -n "s/^[[:space:]]*password[[:space:]]*=>[[:space:]]*'\([^']*\)'.*/\1/p" NicTool/server/t/test-rest.cfg); \
-	test_gid=$$(sed -n "s/^[[:space:]]*test_gid[[:space:]]*=>[[:space:]]*\([0-9][0-9]*\).*/\1/p" NicTool/server/t/test-rest.cfg); \
-	if [ -z "$$user" ] || [ -z "$$password" ] || [ -z "$$test_gid" ]; then \
-		echo "REST browser test settings are missing; recreate nictool-legacy" >&2; exit 1; \
-	fi; \
-	$(V2_E2E_EXEC) \
-		-e NICTOOL_TEST_USER="$$user" \
-		-e NICTOOL_TEST_PASSWORD="$$password" \
-		-e NICTOOL_TEST_GID="$$test_gid" \
-		v2-e2e
+test-v2-e2e: ## Run the v2 browser suite as root (requires up-legacy)
+	@password=$$(sed -n 's/^ROOT_USER_PASSWORD=//p' docker/.env); \
+	if [ -z "$$password" ]; then echo "ROOT_USER_PASSWORD is missing from docker/.env" >&2; exit 1; fi; \
+	$(V2_E2E_EXEC) -e NICTOOL_TEST_USER=root -e NICTOOL_TEST_PASSWORD="$$password" v2-e2e
 
 test-v2-xt: ## Run all NicTool v2 extended tests through SOAP (requires up-legacy)
 	$(MAKE) test-v2-xt-soap

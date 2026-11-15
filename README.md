@@ -108,14 +108,12 @@ existing root user unchanged.
 | `test` | One-off v2 and v3 Playwright runners |
 | `all` | All four services |
 
-The v2 GUI in `nictool-legacy` talks to the v3 api over REST. To point it back
-at its own SOAP endpoint, set `NICTOOL_DATA_PROTOCOL=soap`,
-`NICTOOL_SERVER_HOST=localhost`, and `NICTOOL_SERVER_PORT=8082` in
-`docker/.env`. The v2 test targets set their protocol explicitly either way.
+The v2 GUI in `nictool-legacy` talks to its own SOAP endpoint. The v2 test
+targets set their protocol explicitly.
 
 ## Unreleased member integration
 
-`mani.yaml` declares trains for NicTool#365 and server#8. A fresh
+`mani.yaml` declares a train for server#8. A fresh
 workspace can assemble the integration branches without recording a personal
 fork:
 
@@ -177,21 +175,22 @@ The v2 container has its own Perl test suites running inside the container again
 ```sh
 make test-v2          # all v2 unit and extended tests through SOAP
 make test-v2-soap     # explicit name for make test-v2
-make test-v2-rest     # supported REST bridge extended tests
-make test-v2-e2e-rest # v2 browser suite through REST
+make test-v2-rest     # REST bridge tests, then the supported extended tests through it
+make test-v2-e2e      # v2 browser suite
 make test-v2-unit     # server and client unit tests with SOAP defaults
 make test-v2-xt       # all extended tests through SOAP
-make test-v2-xt-rest  # supported extended tests through REST
+make test-v2-xt-rest  # supported extended tests through the REST bridge
 ```
 
 `make test-v2` and `make test-v2-soap` run the server and client unit tests,
 then every extended ("xt") test through SOAP. The REST bridge target runs
-`xt/14_permissions.t`, `xt/16_delegation.t`, and `xt/20_permission.t`, the
-extended tests supported by both protocols. Each target sets its endpoint,
+`xt/14_permissions.t`, `xt/16_delegation.t`, and `xt/20_permission.t` against
+the v3 api, through the bridge in `tools/v2-rest-bridge/`. Each target sets its endpoint,
 protocol, and test config explicitly, regardless of the container defaults.
 The browser target runs in a pinned Playwright container, installs its node
-packages there, and uses the account generated when `nictool-legacy` starts.
-The legacy profile opts into that account with `NICTOOL_TEST_ENV=1`; NicTool's
+packages there, and logs in as the root user seeded from `docker/.env`. The
+extended tests use the account generated when `nictool-legacy` starts. The
+legacy profile opts into that account with `NICTOOL_TEST_ENV=1`; NicTool's
 standalone container leaves it disabled unless requested.
 
 ## Local development
@@ -236,7 +235,7 @@ make stress-api RUNTIME=node:24 N=25  # repeat the API suite and retain each log
 make test-server  # run v3 server tests only (requires make up-ui)
 make test-libs    # run library tests (no running services needed)
 make test-v2       # run all v2 unit and extended tests through SOAP
-make test-v2-rest  # run the supported v2 extended tests through REST
+make test-v2-rest  # run the supported v2 extended tests through the REST bridge
 make test-v2-xt    # run all v2 extended tests through SOAP
 ```
 

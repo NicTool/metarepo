@@ -16,6 +16,7 @@ NicTool
 
 !/trains/api/
 !/trains/NicTool/
+!/tools/v2-rest-bridge/lib/NicTool/
 
 # local-only scratch (never committed)
 local/

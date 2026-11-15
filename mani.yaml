@@ -18,7 +18,6 @@ projects:
     tags: [v2]
     env:
       pin: master
-      train: 365
 
   api:
     path: api

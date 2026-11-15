@@ -142,15 +142,12 @@ services:
       - ./NicTool/server:/usr/local/nictool/server
       - ./NicTool/client:/usr/local/nictool/client
       - ./NicTool/dist:/usr/local/nictool/dist:ro
+      - ./tools/v2-rest-bridge:/opt/nt-bridge:ro
     env_file: docker/.env
     environment:
       DB_ENGINE: mysql
       DB_HOSTNAME: db
       DB_PORT: "3306"
-      # the v2 GUI talks to the v3 api; SOAP test targets set their own env
-      NICTOOL_DATA_PROTOCOL: ${NICTOOL_DATA_PROTOCOL:-rest}
-      NICTOOL_SERVER_HOST: ${NICTOOL_SERVER_HOST:-api}
-      NICTOOL_SERVER_PORT: ${NICTOOL_SERVER_PORT:-3000}
       NICTOOL_TEST_ENV: "1"
     healthcheck:
       test: ["CMD", "curl", "-fso", "/dev/null", "http://localhost/index.cgi"]
