@@ -7,6 +7,7 @@ use warnings;
 use parent 'NicTool::Transport';
 use HTTP::Tiny;
 use JSON::PP;
+use Net::IP ();
 use NicTool::API;
 
 my $JSON = JSON::PP->new->utf8->allow_nonref;
@@ -371,7 +372,7 @@ sub _qualify_owner {
     $body->{address} =~ s/\.\&$/.in-addr.arpa./ if defined $body->{address};
     if (   defined $body->{address}
         && length $body->{address}
-        && ($body->{type} // '') =~ /^(?:CNAME|MX|NS|PTR|SRV)$/
+        && ($body->{type} // '') =~ /^(?:CNAME|PTR)$/
         && $body->{address} !~ /\.$/ )
     {
         $body->{address} .= ".$bare.";
@@ -445,7 +446,7 @@ sub _unqualify_owner {
     return unless $bare;
 
     if ( lc $owner eq lc "$bare." ) {
-        $entity->{name} = '';
+        $entity->{name} = "$bare.";
     }
     else {
         $entity->{name} =~ s/\.\Q$bare\E\.$//i;
@@ -898,6 +899,21 @@ sub send_request {
     }
     delete $body{gid} if $action =~ /^(?:new|edit)_zone_record$/;
 
+    # v2 refused a relative target for these types, where '@' stands for the zone
+    if ( $action =~ /^(?:new|edit)_zone_record$/ && defined $body{address} && length $body{address} ) {
+        my $type = $body{type};
+        if ( !defined $type && $path =~ m{/zone_record/(\d+)$} ) {
+            my $data = $self->_get_json("/zone_record/$1");
+            $type = $data->{zone_record}[0]{type} if $data && $data->{zone_record} && $data->{zone_record}[0];
+        }
+        if ( ( $type // '' ) =~ /^(?:MX|NS|SRV)$/ && $body{address} !~ /(?:^|\.)\@$|\.$/ ) {
+            my @msg = ( "Address for $type must point to a FQDN (with a '.' at the end): RFCs 1035, 2181."
+                . " You can use the '\@' character to stand for the zone this record belongs to." );
+            push @msg, "invalid character in record address -- $1" if $body{address} =~ /([^a-zA-Z0-9\-._])/;
+            return { error_code => 300, error_desc => 'Sanity error', error_msg => join( ' AND ', @msg ) };
+        }
+    }
+
     # zone_record: qualify relative owners against their zone, like the v2
     # server did; v3's RR parser rejects them
     if (   $action =~ /^(?:new|edit)_zone_record$/
@@ -905,7 +921,7 @@ sub send_request {
             || ( defined $body{address} && $body{address} =~ /(?:^|\.)[\@\&]$/ )
             || (   defined $body{address}
                 && length $body{address}
-                && ($body{type} // '') =~ /^(?:CNAME|MX|NS|PTR|SRV)$/
+                && ($body{type} // '') =~ /^(?:CNAME|PTR)$/
                 && $body{address} !~ /\.$/ ) ) )
     {
         if ($action eq 'edit_zone_record' && !$body{zid} && $path =~ m{/zone_record/(\d+)$}) {
@@ -1072,7 +1088,7 @@ sub send_request {
 
     # HTTP errors
     if ($resp->{status} >= 400) {
-        return _v2_error( $action, _http_error($resp->{status}, $data) );
+        return $self->_v2_error( $action, _http_error($resp->{status}, $data), $path, \%body );
     }
     return _http_error( 502, { error => 'Expected a JSON object response' } )
         unless ref $data eq 'HASH';
@@ -1701,6 +1717,11 @@ sub _remap_fields {
         _remap_zr_rfc_to_v2(\%out);
     }
 
+    # v2 stored AAAA addresses in full
+    if ( $resource eq 'zone_record' && ( $out{type} // '' ) eq 'AAAA' && Net::IP::ip_is_ipv6( $out{address} // '' ) ) {
+        $out{address} = Net::IP::ip_expand_address( $out{address}, 6 );
+    }
+
     # zone_record: v2 expects weight/priority even when 0
     if ($resource eq 'zone_record') {
         $out{weight}   //= 0;
@@ -1784,32 +1805,76 @@ sub _http_error {
     return { error_code => $code, error_msg => $msg, error_desc => $desc };
 }
 
-# v3 refusals in the codes and words the v2 server used for the same refusal
-my @V2_CONFLICTS = (
-    [ qr/^REST: Cannot delete group: active (zones|users|subgroups) still exist/ =>
+# [ action, v3 message, sub giving v2's code and words, or nothing to keep v3's ]
+my $TTL_RANGE = 'Invalid TTL -- valid ttl range is 0 to 2,147,483,647: RFC 2181';
+my @V2_REFUSALS = (
+    [ qr/^delete_group$/, qr/^REST: Cannot delete group: active (zones|users|subgroups) still exist/ =>
         sub { ( 600, "You can't delete this group until you delete all of its "
                 . ( $_[0] eq 'subgroups' ? 'sub-groups' : $_[0] ) ) } ],
-    [ qr/^REST: zone \S+ already exists/ => sub { ( 300, 'Zone is already taken' ) } ],
+    [ qr/^new_zone$/, qr/^REST: zone \S+ already exists/ => sub { ( 300, 'Zone is already taken' ) } ],
+    [ qr/^(?:new|edit)_user$/, qr/^REST: "username" length must be at least 3/ =>
+        sub { ( 300, 'Username must be at least 3 characters.' ) } ],
+    [ qr/^(?:new|edit)_zone(?:_record)?$/, qr/^REST: "ttl" must be a number/ =>
+        sub { ( 300, 'Invalid TTL -- must be numeric' ) } ],
+    [ qr/^(?:new|edit)_zone(?:_record)?$/, qr/^REST: "ttl" must be (?:greater|less) than or equal/ =>
+        sub { ( 300, $TTL_RANGE ) } ],
+    [ qr/^(?:new|edit)_zone_record$/, qr/^REST: "type" must be one of/ =>
+        sub { ( 300, "Invalid record type $_[-1]{type}" ) } ],
+    [ qr/^(?:new|edit)_zone_record$/, qr/^REST: "owner" with value "(.*)" fails to match the required pattern/ =>
+        sub { $_[0] =~ /([^A-Za-z0-9_*.-])/ ? ( 300, "invalid character(s) in record name -- $1" ) : () } ],
+    [ qr/^(?:new|edit)_zone_record$/, qr/^REST: A address must be IPv4/ =>
+        sub { ( 300, 'Address for A records must be a valid IP address.' ) } ],
+    [ qr/^(?:new|edit)_zone_record$/, qr/^REST: "address" length must be at least/ =>
+        sub { ( $_[-1]{type} // '' ) eq 'A' ? ( 300, 'Address for A records must be a valid IP address.' ) : () } ],
+    [ qr/^(?:new|edit)_zone_record$/, qr/^REST: AAAA: address must be IPv6/ =>
+        sub { ( 300, 'Address for AAAA records must be a valid IPv6 address.' ) } ],
+    [ qr/^new_zone_record$/, qr/^No target group found for new zonerecord/ =>
+        sub { $_[-2]->_is_deleted( zone => $_[-1]{zid} )
+                ? ( 300, 'Cannot create/edit records in a deleted zone.' ) : () } ],
+    [ qr/^new_(?:nameserver|group|user|zone)$/, qr/^No active target group found for new (\w+)/ =>
+        sub { $_[-2]->_is_deleted( group => $_[-1]{gid} // $_[-1]{parent_gid} )
+                ? ( 300, "Cannot add $_[0] to a deleted group!" ) : () } ],
+    [ qr/^edit_zone_record$/, qr/^REST: I couldn't find that zone record/ =>
+        sub { $_[-2]->_is_deleted( zone_record => $_[-1]{id} ) ? ( 300, 'Cannot edit deleted record!' ) : () } ],
+    [ qr/^edit_user$/, qr/^REST: user not found/ =>
+        sub { $_[-2]->_is_deleted( user => $_[-1]{id} ) ? ( 300, 'Cannot edit deleted user!' ) : () } ],
+    [ qr/delegat/, qr/^Delegation target group is deleted/ =>
+        sub { ( 300, 'Cannot delegate to a deleted group!' ) } ],
+    [ qr/delegat/, qr/^Cannot change delegation for a deleted object/ =>
+        sub { ( 300, 'Cannot delegate deleted objects!' ) } ],
+    [ qr/^move_users$/, qr/^Cannot move yourself to another group/ =>
+        sub { ( 300, 'Cannot move yourself to another group!' ) } ],
 );
 
 sub _v2_error {
-    my ( $action, $err ) = @_;
+    my ( $self, $action, $err, $path, $body ) = @_;
     my $code = $err->{error_code} // 0;
 
     return { error_code => 403, error_msg => 'Invalid username and/or password.' }
         if $action eq 'login' && $code == 401;
 
-    if ( $code == 400 || $code == 409 ) {
-        for my $conflict (@V2_CONFLICTS) {
-            my ( $re, $v2 ) = @$conflict;
-            my @match = $err->{error_msg} =~ $re or next;
-            my ( $v2_code, $msg ) = $v2->(@match);
-            return { error_code => $v2_code, error_msg => $msg,
-                error_desc => $v2_code == 600 ? 'Failure' : 'Sanity error' };
-        }
-        return { %$err, error_code => 300, error_desc => 'Sanity error' } if $code == 400;
+    my %context = ( %{ $body || {} } );
+    $context{id} = $1 if ( $path // '' ) =~ m{/(\d+)$};
+    for my $refusal (@V2_REFUSALS) {
+        my ( $action_re, $re, $v2 ) = @$refusal;
+        next if $action !~ $action_re;
+        my @match = ( $err->{error_msg} // '' ) =~ $re or next;
+        my ( $v2_code, $msg ) = $v2->( @match, $self, \%context ) or last;
+        return { error_code => $v2_code, error_msg => $msg,
+            error_desc => $v2_code == 600 ? 'Failure' : 'Sanity error' };
     }
+    return { %$err, error_code => 300, error_desc => 'Sanity error' } if $code == 400;
     return $err;
+}
+
+# a refusal that v3 words as "not found" reads as v2's deleted-object refusal
+# only when the row is there and deleted
+sub _is_deleted {
+    my ( $self, $resource, $id ) = @_;
+    return 0 unless defined $id && $id =~ /^\d+$/;
+    my $data = $self->_get_json("/$resource/$id?deleted=true");
+    my $row  = $data && $data->{$resource} && $data->{$resource}[0];
+    return $row && $row->{deleted} ? 1 : 0;
 }
 
 sub _flatten_permissions {
