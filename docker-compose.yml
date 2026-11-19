@@ -36,6 +36,8 @@ services:
       - api_node_modules:/app/node_modules
       # the manifest's validate checkout, not whatever npm resolved
       - ./libs/validate:/app/node_modules/@nictool/validate
+      # make test-libs installs a second joi here, and hapi-swagger refuses to mix them
+      - /app/node_modules/@nictool/validate/node_modules
       - ./libs/dns-resource-record:/app/node_modules/@nictool/dns-resource-record
     environment:
       NODE_ENV: development
@@ -80,6 +82,7 @@ services:
       - ./api:/app
       - api_node_modules:/app/node_modules
       - ./libs/validate:/app/node_modules/@nictool/validate
+      - /app/node_modules/@nictool/validate/node_modules
       - ./docker/seed-root-user.mjs:/init/seed-root-user.mjs:ro
     env_file: docker/.env
     environment:

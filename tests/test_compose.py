@@ -40,6 +40,12 @@ class ComposeTests(unittest.TestCase):
 
         self.assertIn("./libs/validate:/app/node_modules/@nictool/validate", volumes)
 
+    def test_validate_resolves_the_api_joi(self):
+        for service in ("api", "root-user-init"):
+            volumes = compose()["services"][service]["volumes"]
+
+            self.assertIn("/app/node_modules/@nictool/validate/node_modules", volumes, service)
+
     def test_legacy_gui_keeps_its_soap_defaults_and_mounts_the_bridge(self):
         legacy = compose()["services"]["nictool-legacy"]
         env = legacy["environment"]
