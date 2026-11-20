@@ -1814,6 +1814,8 @@ my @V2_REFUSALS = (
     [ qr/^new_zone$/, qr/^REST: zone \S+ already exists/ => sub { ( 300, 'Zone is already taken' ) } ],
     [ qr/^(?:new|edit)_user$/, qr/^REST: "username" length must be at least 3/ =>
         sub { ( 300, 'Username must be at least 3 characters.' ) } ],
+    [ qr/^(?:new|edit)_user$/, qr/^REST: username (.+) is not unique$/ =>
+        sub { ( 300, "Username $_[0] is not unique. Please choose a different username or put the user in a different group." ) } ],
     [ qr/^(?:new|edit)_zone(?:_record)?$/, qr/^REST: "ttl" must be a number/ =>
         sub { ( 300, 'Invalid TTL -- must be numeric' ) } ],
     [ qr/^(?:new|edit)_zone(?:_record)?$/, qr/^REST: "ttl" must be (?:greater|less) than or equal/ =>
