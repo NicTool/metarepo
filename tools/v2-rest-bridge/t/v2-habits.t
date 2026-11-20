@@ -139,6 +139,12 @@ sub body {
     $res = call( transport( refusal( 400, '"username" length must be at least 3 characters long' ) ),
         action => 'edit_user', nt_user_id => 9, username => 'bl' );
     is $res->{error_msg}, 'Username must be at least 3 characters.', 'a short username';
+
+    $res = call( transport( response( { statusCode => 409, error => 'Conflict', message => 'username bob@Sales Team is not unique' }, 409 ) ),
+        action => 'edit_user', nt_user_id => 9, username => 'bob' );
+    is "$res->{error_code} $res->{error_msg}",
+        '300 Username bob@Sales Team is not unique. Please choose a different username or put the user in a different group.',
+        'a taken username';
 }
 
 # relative MX, NS and SRV targets are refused before v3, as v2 did
