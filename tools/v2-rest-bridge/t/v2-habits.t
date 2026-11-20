@@ -145,6 +145,10 @@ sub body {
     is "$res->{error_code} $res->{error_msg}",
         '300 Username bob@Sales Team is not unique. Please choose a different username or put the user in a different group.',
         'a taken username';
+
+    $res = call( transport( response( { statusCode => 409, error => 'Conflict', message => 'group Sales Team already exists in group 2' }, 409 ) ),
+        action => 'edit_group', nt_group_id => 7, name => 'Sales Team' );
+    is "$res->{error_code} $res->{error_msg}", '300 Group name is already taken at this level.', 'a taken group name';
 }
 
 # relative MX, NS and SRV targets are refused before v3, as v2 did

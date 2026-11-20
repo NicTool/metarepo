@@ -56,7 +56,6 @@ test then fails. These are v3's to fix:
 
 - A user created without a first or last name is stored with NULL. Every listing
   that holds it then answers 500.
-- A second group with the same name under one parent is accepted.
 - Nameserver `datadir`, `logdir` and `remote_login` take any value.
 - A nameserver that zones still use can be deleted.
 - PUT `/zone_record` skips its rdata checks unless the type changes.

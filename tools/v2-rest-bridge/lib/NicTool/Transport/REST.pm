@@ -1812,6 +1812,8 @@ my @V2_REFUSALS = (
         sub { ( 600, "You can't delete this group until you delete all of its "
                 . ( $_[0] eq 'subgroups' ? 'sub-groups' : $_[0] ) ) } ],
     [ qr/^new_zone$/, qr/^REST: zone \S+ already exists/ => sub { ( 300, 'Zone is already taken' ) } ],
+    [ qr/^(?:new|edit)_group$/, qr/^REST: group .+ already exists in group \d+$/ =>
+        sub { ( 300, 'Group name is already taken at this level.' ) } ],
     [ qr/^(?:new|edit)_user$/, qr/^REST: "username" length must be at least 3/ =>
         sub { ( 300, 'Username must be at least 3 characters.' ) } ],
     [ qr/^(?:new|edit)_user$/, qr/^REST: username (.+) is not unique$/ =>
